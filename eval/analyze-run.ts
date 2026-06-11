@@ -62,11 +62,17 @@ function taskIdForPrompt(prompt: string): string {
 function analyzeSubcalls(runDir: string, label: string): void {
   const file = path.join(runDir, "subcalls.jsonl");
   if (!fs.existsSync(file)) return;
-  const rows: SubCallRow[] = fs
-    .readFileSync(file, "utf8")
-    .split("\n")
-    .filter((line) => line.trim() !== "")
-    .map((line) => JSON.parse(line) as SubCallRow);
+  // Per-line tolerance: a run killed mid-append leaves a partial last line;
+  // that is itself a finding, not a reason for the analyzer to crash.
+  const rows: SubCallRow[] = [];
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    if (line.trim() === "") continue;
+    try {
+      rows.push(JSON.parse(line) as SubCallRow);
+    } catch {
+      flag("DEFECT", label, `subcalls.jsonl contains an unparseable line (truncated write?): ${line.slice(0, 80)}`);
+    }
+  }
 
   const retried = rows.filter((r) => r.retries > 0);
   const failed = rows.filter((r) => r.error !== undefined);
@@ -96,6 +102,11 @@ interface GvrRow {
   score: number | null;
   gradeError: string | null;
   critique?: { violations?: string[]; revisionDirectives?: string[] } | null;
+  execProbe?: { ran: boolean; exitCode: number | null; timedOut: boolean; skippedReason: string | null } | null;
+}
+
+function probeFailed(row: GvrRow): boolean {
+  return row.execProbe?.ran === true && (row.execProbe.exitCode !== 0 || row.execProbe.timedOut === true);
 }
 
 function analyzePipelineRun(runDir: string): string[] {
@@ -134,8 +145,8 @@ function analyzePipelineRun(runDir: string): string[] {
 
   const gvr = readJson<GvrRow[]>(path.join(runDir, "gvr.json"));
   if (gvr) {
-    const trajectory = gvr.map((g) => g.score ?? "ERR").join(" -> ");
-    lines.push(`  GVR: ${trajectory}`);
+    const trajectory = gvr.map((g) => `${g.score ?? "ERR"}${probeFailed(g) ? "!" : ""}`).join(" -> ");
+    lines.push(`  GVR: ${trajectory}${gvr.some(probeFailed) ? "  (! = self-test probe failed)" : ""}`);
     for (const g of gvr) {
       if (g.gradeError) flag("RISK", name, `round ${g.round} grade failed: ${g.gradeError}`);
     }
@@ -146,6 +157,17 @@ function analyzePipelineRun(runDir: string): string[] {
       const cur = gvr[i]?.score;
       if (typeof prev === "number" && typeof cur === "number" && cur < prev - 5) {
         flag("RISK", name, `revision regressed: round ${i} ${prev} -> round ${i + 1} ${cur} (critique-led regression or grader noise)`);
+      }
+    }
+    // The probe exists to force repair: every round failing it means the loop
+    // never produced runtime-working code and shipped a capped best.
+    const probed = gvr.filter((g) => g.execProbe?.ran === true);
+    if (probed.length > 0 && probed.every(probeFailed)) {
+      flag("DEFECT", name, `self-test probe FAILED on every round (${probed.length}) - best answer never observed working`);
+    } else {
+      const last = gvr[gvr.length - 1];
+      if (last && probeFailed(last)) {
+        flag("RISK", name, `final GVR round still had a failing self-test probe`);
       }
     }
   }

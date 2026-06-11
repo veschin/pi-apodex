@@ -65,10 +65,23 @@ export async function runNodeScript(req: ExecRequest): Promise<ExecEvidence> {
   }
 
   try {
-    for (const [name, contents] of Object.entries(req.files)) {
-      const filePath = path.join(dir, name);
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, contents, "utf8");
+    // File writes degrade to skip-evidence, never to a rejection: a disk
+    // hiccup here must not kill the GVR loop that called the probe.
+    try {
+      for (const [name, contents] of Object.entries(req.files)) {
+        const filePath = path.join(dir, name);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, contents, "utf8");
+      }
+    } catch (err) {
+      return {
+        ran: false,
+        exitCode: null,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+        skippedReason: `file write failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
     }
 
     return await new Promise<ExecEvidence>((resolve) => {
