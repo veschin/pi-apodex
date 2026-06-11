@@ -157,7 +157,19 @@ export default function (pi: ExtensionAPI) {
         if (ctx.hasUI) ctx.ui.notify("Usage: /apodex <task text>", "warning");
         return;
       }
+      // Visible launch echo: a slash command consumes the input line, so
+      // without this the chat shows nothing until the pipeline finishes
+      // minutes later and the run looks dead.
+      pi.sendMessage(
+        {
+          customType: "apodex-progress",
+          content: `apodex run started\ntask: ${truncate(task, 160)}\nThe pipeline runs for minutes (progress in the widget above the editor and in the status bar); the result will arrive here as a message.`,
+          display: true,
+        },
+        { triggerTurn: false },
+      );
       if (ctx.hasUI) ctx.ui.setStatus("apodex", "apodex: starting");
+      const recentProgress: string[] = [];
       try {
         const result = await execute(
           task,
@@ -166,7 +178,10 @@ export default function (pi: ExtensionAPI) {
           ctx,
           undefined,
           (message) => {
-            if (ctx.hasUI) ctx.ui.setStatus("apodex", `apodex: ${truncate(message, 80)}`);
+            if (!ctx.hasUI) return;
+            ctx.ui.setStatus("apodex", `apodex: ${truncate(message, 80)}`);
+            recentProgress.push(truncate(message, 100));
+            ctx.ui.setWidget("apodex", ["apodex pipeline:", ...recentProgress.slice(-4)]);
           },
         );
         pi.sendMessage(
@@ -181,9 +196,19 @@ export default function (pi: ExtensionAPI) {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (ctx.hasUI) ctx.ui.notify(`apodex failed: ${truncate(message, 200)}`, "error");
-        else console.error(`apodex failed: ${message}`);
+        pi.sendMessage(
+          {
+            customType: "apodex-result",
+            content: `apodex run FAILED: ${truncate(message, 300)}`,
+            display: true,
+          },
+          { triggerTurn: false },
+        );
       } finally {
-        if (ctx.hasUI) ctx.ui.setStatus("apodex", "");
+        if (ctx.hasUI) {
+          ctx.ui.setStatus("apodex", "");
+          ctx.ui.setWidget("apodex", []);
+        }
       }
     },
   });
