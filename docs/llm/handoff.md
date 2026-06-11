@@ -13,6 +13,12 @@ https://github.com/veschin/pi-apodex), 2026-06-11 evening.
 - Full pipeline (selector -> GVR with exec probe -> claim audit -> assembly)
   working on all three surfaces: model-initiated tool, `/apodex` command,
   standalone (`eval/smoke-pipeline.ts`).
+- **Delivery contract**: spend summary (cost/sub-calls/tokens in-out/wall) +
+  inline answer <=1500 chars, else `<runDir>/final.md` path + preview + NEXT
+  STEP directive; `/apodex` result wakes the session model (triggerTurn) to
+  finish the user's request. File branch + token split verified headless;
+  the TUI wake-up needs interactive confirmation after the user's `/reload`
+  (see [40_extension.md](40_extension.md)).
 - Installed for the user via symlink `~/.pi/agent/extensions/pi-apodex` -
   auto-discovered by plain `pi` (verified by headless tool listing).
 - Reported eval `docs/eval-results/20260611-164416`: flash 0.96 -> 1.00
@@ -42,9 +48,12 @@ https://github.com/veschin/pi-apodex), 2026-06-11 evening.
    started - he must `/reload` (when no runs are in flight) to get it.
 2. Double-Enter creates duplicate runs - no debounce/queue on the command
    path.
-3. Huge monolithic tasks produce mediocre value per dollar; guidance (split
-   into per-subsystem calls) lives only in chat advice, not in the tool
-   description or docs.
+3. Huge monolithic tasks produce mediocre value per dollar; the tool
+   description now states the answer-not-implementation contract, but
+   task-splitting guidance still lives only in chat advice.
+4. The user's live session predates the delivery/auto-continue changes; the
+   TUI wake-up (`triggerTurn`) is unverified interactively until he
+   `/reload`s and runs one `/apodex`.
 
 ## Next options (user picks; not a queue)
 

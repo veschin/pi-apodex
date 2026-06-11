@@ -18,6 +18,8 @@ export class Budget {
   private readonly startedAt: number;
   private subCalls = 0;
   private totalTokens = 0;
+  private inputTokens = 0;
+  private outputTokens = 0;
   private costUsd = 0;
 
   constructor(config: BudgetConfig) {
@@ -51,6 +53,8 @@ export class Budget {
   record(usage: UsageTotals): void {
     this.subCalls += 1;
     this.totalTokens += usage.input + usage.output;
+    this.inputTokens += usage.input;
+    this.outputTokens += usage.output;
     this.costUsd += usage.costUsd;
   }
 
@@ -58,6 +62,8 @@ export class Budget {
     return {
       subCalls: this.subCalls,
       totalTokens: this.totalTokens,
+      inputTokens: this.inputTokens,
+      outputTokens: this.outputTokens,
       costUsd: this.costUsd,
       elapsedMs: Date.now() - this.startedAt,
       limits: { ...this.config },

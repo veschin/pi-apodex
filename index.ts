@@ -21,11 +21,28 @@ import type { ApodexResult, TaskMode } from "./src/types.ts";
 
 const MODE_VALUES = ["auto", "design", "code", "incident", "general"] as const;
 
+function fmtTokens(n: number): string {
+  return n >= 10_000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+function fmtDuration(ms: number): string {
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
 function summaryLines(result: ApodexResult): string[] {
   const lines = [
     `run: ${result.runId} (mode ${result.mode})`,
-    `best grader score: ${result.bestScore ?? "n/a"}/100${result.gvr?.earlyStopped ? " (early stop)" : ""}`,
+    `best grader score: ${result.bestScore ?? "n/a"}/100`,
   ];
+  if (result.gvr) {
+    const trajectory = result.gvr.attempts.map((a) => a.critique?.score ?? "ERR").join(" -> ");
+    lines.push(
+      `gvr rounds: ${result.gvr.roundsRun} (scores ${trajectory})${result.gvr.earlyStopped ? ", early stop at threshold" : ""}`,
+    );
+  }
   if (result.selection) {
     lines.push(
       `selector: ${result.selection.candidates.length} candidates, winner #${result.selection.winnerIndex}`,
@@ -42,12 +59,50 @@ function summaryLines(result: ApodexResult): string[] {
     }
   }
   lines.push(
-    `budget: ${result.budget.subCalls} sub-calls, ${result.budget.totalTokens} tokens, $${result.budget.costUsd.toFixed(4)}, ${Math.round(result.budget.elapsedMs / 1000)}s`,
+    `spent: $${result.budget.costUsd.toFixed(4)} | ${result.budget.subCalls} sub-calls | tokens ${fmtTokens(result.budget.inputTokens)} in / ${fmtTokens(result.budget.outputTokens)} out | wall ${fmtDuration(result.budget.elapsedMs)}`,
   );
   if (result.budgetExhausted) lines.push("NOTE: budget exhausted - best-so-far answer returned");
   if (result.warnings.length > 0) lines.push(`warnings: ${result.warnings.length} (see run.json)`);
   lines.push(`artifacts: ${result.runDir}`);
   return lines;
+}
+
+/**
+ * Answers up to this size are delivered inline; larger ones are delivered as
+ * a file reference (the full text always lives in <runDir>/final.md) so a
+ * multi-page answer does not flood the chat or the caller's context.
+ */
+const INLINE_ANSWER_LIMIT = 1_500;
+
+/**
+ * channel "tool": the host model is mid-turn - a short answer needs no
+ * directive (the model continues naturally). channel "chat": the message
+ * itself wakes the session model (triggerTurn), so a continuation directive
+ * is ALWAYS attached - finishing the user's request is the point.
+ */
+function composeDelivery(result: ApodexResult, channel: "tool" | "chat"): string {
+  const header = summaryLines(result).join("\n");
+  const answerPath = `${result.runDir}/final.md`;
+  const inline = result.finalAnswer.length <= INLINE_ANSWER_LIMIT;
+
+  if (inline) {
+    const directive =
+      channel === "chat"
+        ? `\n\nNEXT STEP: the verified answer above is final pipeline output - continue the user's original request based on it: apply/implement it in the workspace when the task asked for implementation, otherwise summarize the substance in one short reply.`
+        : "";
+    return `${header}\n\n---\n\n${result.finalAnswer}${directive}`;
+  }
+
+  const preview = result.finalAnswer.slice(0, 400).trimEnd();
+  return [
+    header,
+    "",
+    `The verified answer is ${result.finalAnswer.length} chars - saved to: ${answerPath}`,
+    "",
+    `Preview:\n${preview}...`,
+    "",
+    `NEXT STEP: read ${answerPath} and continue the user's original request based on it - apply/implement it in the workspace when the task asked for implementation, otherwise present its substance concisely. Do not paste the whole file back into the chat.`,
+  ].join("\n");
 }
 
 async function execute(
@@ -80,7 +135,7 @@ export default function (pi: ExtensionAPI) {
     name: "apodex",
     label: "Apodex",
     description:
-      "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer. Costs multiple model sub-calls; use for tasks where single-pass answers are unreliable, not for trivial questions.",
+      "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer. The pipeline produces a VERIFIED ANSWER, not workspace changes: long answers are saved to <runDir>/final.md and the result carries a spend summary plus a NEXT STEP - read the file and apply/implement it yourself when the user asked for implementation. Costs multiple model sub-calls; use for tasks where single-pass answers are unreliable, not for trivial questions.",
     parameters: Type.Object({
       task: Type.String({
         description: "The full task statement, self-contained: goal, constraints, inputs, logs - everything the team needs.",
@@ -119,12 +174,12 @@ export default function (pi: ExtensionAPI) {
           signal,
           onProgress,
         );
-        const header = summaryLines(result).join("\n");
         return {
-          content: [{ type: "text", text: `${header}\n\n---\n\n${result.finalAnswer}` }],
+          content: [{ type: "text", text: composeDelivery(result, "tool") }],
           details: {
             runId: result.runId,
             runDir: result.runDir,
+            finalAnswerPath: `${result.runDir}/final.md`,
             mode: result.mode,
             bestScore: result.bestScore,
             holisticVerdict: result.verification?.holistic?.verdict ?? null,
@@ -184,14 +239,17 @@ export default function (pi: ExtensionAPI) {
             ctx.ui.setWidget("apodex", ["apodex pipeline:", ...recentProgress.slice(-4)]);
           },
         );
+        // triggerTurn: the session model wakes up on the result and finishes
+        // the job (reads final.md, applies/implements or presents) instead of
+        // the run dead-ending as a wall of text in the chat.
         pi.sendMessage(
           {
             customType: "apodex-result",
-            content: `apodex result (${result.runId})\n${summaryLines(result).join("\n")}\n\n---\n\n${result.finalAnswer}`,
+            content: `apodex result (${result.runId})\n${composeDelivery(result, "chat")}`,
             display: true,
-            details: { runDir: result.runDir },
+            details: { runDir: result.runDir, finalAnswerPath: `${result.runDir}/final.md` },
           },
-          { triggerTurn: false },
+          { triggerTurn: true },
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

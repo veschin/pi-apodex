@@ -54,6 +54,8 @@ export interface UsageTotals {
 export interface BudgetSnapshot {
   subCalls: number;
   totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
   costUsd: number;
   elapsedMs: number;
   limits: BudgetConfig;

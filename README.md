@@ -418,8 +418,14 @@ git clone git@github.com:veschin/pi-apodex ~/.pi/agent/extensions/pi-apodex
   delegation.
 - **User-initiated** - `/apodex <task text>` runs the pipeline directly;
   `/apodex-config` prints the effective configuration.
-- Every run prints scores, verdicts, budget usage, and the artifact
-  directory.
+- **Delivery** - the pipeline produces a *verified answer*, not workspace
+  changes. Every result carries a spend summary (cost, sub-calls, tokens
+  in/out, wall time) and GVR score trajectory; answers longer than ~1.5 KB
+  are saved to `<runDir>/final.md` and referenced by path instead of flooding
+  the chat. After `/apodex`, the session model is woken with a directive to
+  read the answer and finish the request (apply/implement when the task asked
+  for it) - the division of labor is deliberate: the pipeline thinks, the
+  session acts.
 
 ### 7.3 Configuration
 

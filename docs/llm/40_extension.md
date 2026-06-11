@@ -12,16 +12,27 @@ See also: [30_subcall_infra.md](30_subcall_infra.md) · [10_scope.md](10_scope.m
 
 - **Tool `apodex`** (LLM-callable): params `task`, `mode?`
   (auto|design|code|incident|general), `rounds?` (1-10), `candidates?` (1-8).
-  Streams progress via `onUpdate` (last 8 lines); returns summary header +
-  final answer; errors return `isError: true` with progress-so-far. The
-  host's abort signal IS threaded (Esc cancels sub-calls).
+  Streams progress via `onUpdate` (last 8 lines); errors return
+  `isError: true` with progress-so-far. The host's abort signal IS threaded
+  (Esc cancels sub-calls).
+- **Delivery contract (`composeDelivery`)**: the pipeline produces a verified
+  ANSWER, never workspace changes. Result = spend summary (cost, sub-calls,
+  tokens in/out, wall) + answer **inline only when <= `INLINE_ANSWER_LIMIT`
+  (1500 chars)**; longer answers are delivered as `<runDir>/final.md` path +
+  400-char preview + a NEXT STEP directive (read the file, then
+  apply/implement or present; never paste the file back). Tool details carry
+  `finalAnswerPath`.
 - **`/apodex <task>`**: posts a chat-visible launch echo immediately (a slash
   command consumes the input line - without the echo the run looks dead for
   minutes; real incident), mirrors progress to a widget above the editor
   (last 4 stages) + footer status, posts result or an explicit FAILED message
-  to chat. **Known gap: this path passes `signal: undefined` - a command-run
-  pipeline is not abortable from the TUI** (ctx.signal is undefined outside
-  turns; backlog).
+  to chat. The result message uses **`triggerTurn: true`** - the session
+  model wakes up and finishes the user's request from the delivery (chat
+  channel always carries the NEXT STEP directive, even inline). Verified
+  headless up to the message send; the wake-up itself is TUI behavior
+  (print mode exits without waiting for triggered turns). **Known gap: this
+  path passes `signal: undefined` - a command-run pipeline is not abortable
+  from the TUI** (ctx.signal is undefined outside turns; backlog).
 - **`/apodex-config`**: prints effective config + session model.
 
 ## Integration facts (do not re-derive; verified in NOTES.md)
