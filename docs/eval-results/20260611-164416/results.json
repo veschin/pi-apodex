@@ -1,0 +1,704 @@
+[
+  {
+    "task": "code-intervals",
+    "bucket": "code",
+    "engine": "pro",
+    "baseline": {
+      "answer": "[7797 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "hidden tests: 16/16 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 16/16 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 16/16 passed (exit 0)"
+        }
+      ],
+      "wallMs": 410913,
+      "subCalls": 3,
+      "costUsd": 0.02888922
+    },
+    "pipeline": {
+      "answer": "[13328 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "hidden tests: 16/16 passed (exit 0)"
+      },
+      "wallMs": 437178,
+      "subCalls": 28,
+      "costUsd": 0.06534895399999999
+    }
+  },
+  {
+    "task": "code-lru",
+    "bucket": "code",
+    "engine": "pro",
+    "baseline": {
+      "answer": "[22492 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "hidden tests: 9/9 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 9/9 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 9/9 passed (exit 0)"
+        }
+      ],
+      "wallMs": 976588,
+      "subCalls": 3,
+      "costUsd": 0.042763371
+    },
+    "pipeline": {
+      "answer": "[21276 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "hidden tests: 9/9 passed (exit 0)"
+      },
+      "wallMs": 1305224,
+      "subCalls": 34,
+      "costUsd": 0.17925568400000003
+    }
+  },
+  {
+    "task": "code-retry",
+    "bucket": "code",
+    "engine": "pro",
+    "baseline": {
+      "answer": "[19052 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "hidden tests: 10/10 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 10/10 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 10/10 passed (exit 0)"
+        }
+      ],
+      "wallMs": 703913,
+      "subCalls": 3,
+      "costUsd": 0.045695561
+    },
+    "pipeline": {
+      "answer": "[21105 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "hidden tests: 10/10 passed (exit 0)"
+      },
+      "wallMs": 1121485,
+      "subCalls": 33,
+      "costUsd": 0.154509015
+    }
+  },
+  {
+    "task": "design-dedup-store",
+    "bucket": "design",
+    "engine": "pro",
+    "baseline": {
+      "answer": "[15606 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "rubric: 8/8 [chunking:+ hashing:+ gc:+ gc-race:+ partial-upload:+ metadata-scale:+ alternative:+ integrity:+]"
+        },
+        {
+          "score": 1,
+          "detail": "rubric: 8/8 [chunking:+ hashing:+ gc:+ gc-race:+ partial-upload:+ metadata-scale:+ alternative:+ integrity:+]"
+        },
+        {
+          "score": 1,
+          "detail": "rubric: 8/8 [chunking:+ hashing:+ gc:+ gc-race:+ partial-upload:+ metadata-scale:+ alternative:+ integrity:+]"
+        }
+      ],
+      "wallMs": 670204,
+      "subCalls": 3,
+      "costUsd": 0.035216991
+    },
+    "pipeline": {
+      "answer": "[25567 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "rubric: 8/8 [chunking:+ hashing:+ gc:+ gc-race:+ partial-upload:+ metadata-scale:+ alternative:+ integrity:+]"
+      },
+      "wallMs": 1191198,
+      "subCalls": 25,
+      "costUsd": 0.10174578520000002
+    }
+  },
+  {
+    "task": "design-rate-limiter",
+    "bucket": "design",
+    "engine": "pro",
+    "baseline": {
+      "answer": "[9026 chars, see *.baseline.md]",
+      "score": {
+        "score": 0.9166666666666666,
+        "detail": "mean of 3 samples [0.88, 0.88, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 0.875,
+          "detail": "rubric: 7/8 [algo:+ atomicity:+ redis-down:+ latency:+ hot-keys:+ 429:- alternative:+ observability:+]"
+        },
+        {
+          "score": 0.875,
+          "detail": "rubric: 7/8 [algo:+ atomicity:+ redis-down:+ latency:+ hot-keys:+ 429:- alternative:+ observability:+]"
+        },
+        {
+          "score": 1,
+          "detail": "rubric: 8/8 [algo:+ atomicity:+ redis-down:+ latency:+ hot-keys:+ 429:+ alternative:+ observability:+]"
+        }
+      ],
+      "wallMs": 477404,
+      "subCalls": 3,
+      "costUsd": 0.024361566
+    },
+    "pipeline": {
+      "answer": "[19591 chars, see *.pipeline.md]",
+      "score": {
+        "score": 0.875,
+        "detail": "rubric: 7/8 [algo:+ atomicity:+ redis-down:+ latency:+ hot-keys:+ 429:- alternative:+ observability:+]"
+      },
+      "wallMs": 867438,
+      "subCalls": 23,
+      "costUsd": 0.0717732164
+    }
+  },
+  {
+    "task": "design-webhooks",
+    "bucket": "design",
+    "engine": "pro",
+    "baseline": {
+      "answer": "[12756 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "rubric: 8/8 [queue-retry:+ isolation:+ idempotency:+ signing:+ dlq-replay:+ ordering:+ alternative:+ observability:+]"
+        },
+        {
+          "score": 1,
+          "detail": "rubric: 8/8 [queue-retry:+ isolation:+ idempotency:+ signing:+ dlq-replay:+ ordering:+ alternative:+ observability:+]"
+        },
+        {
+          "score": 1,
+          "detail": "rubric: 8/8 [queue-retry:+ isolation:+ idempotency:+ signing:+ dlq-replay:+ ordering:+ alternative:+ observability:+]"
+        }
+      ],
+      "wallMs": 490857,
+      "subCalls": 3,
+      "costUsd": 0.025364241
+    },
+    "pipeline": {
+      "answer": "[27661 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "rubric: 8/8 [queue-retry:+ isolation:+ idempotency:+ signing:+ dlq-replay:+ ordering:+ alternative:+ observability:+]"
+      },
+      "wallMs": 777291,
+      "subCalls": 23,
+      "costUsd": 0.06787609759999999
+    }
+  },
+  {
+    "task": "incident-dst-cron",
+    "bucket": "incident",
+    "engine": "pro",
+    "baseline": {
+      "answer": "[4979 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        }
+      ],
+      "wallMs": 122204,
+      "subCalls": 3,
+      "costUsd": 0.007221870000000002
+    },
+    "pipeline": {
+      "answer": "[4688 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "primary diagnosis correct (confidence high)"
+      },
+      "wallMs": 141229,
+      "subCalls": 17,
+      "costUsd": 0.0134443288
+    }
+  },
+  {
+    "task": "incident-pool-leak",
+    "bucket": "incident",
+    "engine": "pro",
+    "baseline": {
+      "answer": "[4470 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        }
+      ],
+      "wallMs": 117829,
+      "subCalls": 3,
+      "costUsd": 0.006753897
+    },
+    "pipeline": {
+      "answer": "[5874 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "primary diagnosis correct (confidence high)"
+      },
+      "wallMs": 169733,
+      "subCalls": 17,
+      "costUsd": 0.013762347
+    }
+  },
+  {
+    "task": "incident-stampede",
+    "bucket": "incident",
+    "engine": "pro",
+    "baseline": {
+      "answer": "[4924 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        }
+      ],
+      "wallMs": 95774,
+      "subCalls": 3,
+      "costUsd": 0.00532266
+    },
+    "pipeline": {
+      "answer": "[7851 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "primary diagnosis correct (confidence high)"
+      },
+      "wallMs": 250980,
+      "subCalls": 20,
+      "costUsd": 0.023700841200000003
+    }
+  },
+  {
+    "task": "code-intervals",
+    "bucket": "code",
+    "engine": "flash",
+    "baseline": {
+      "answer": "[11056 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "hidden tests: 16/16 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 16/16 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 16/16 passed (exit 0)"
+        }
+      ],
+      "wallMs": 236451,
+      "subCalls": 3,
+      "costUsd": 0.0058922976000000005
+    },
+    "pipeline": {
+      "answer": "[8085 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "hidden tests: 16/16 passed (exit 0)"
+      },
+      "wallMs": 231788,
+      "subCalls": 27,
+      "costUsd": 0.0170283456
+    }
+  },
+  {
+    "task": "code-lru",
+    "bucket": "code",
+    "engine": "flash",
+    "baseline": {
+      "answer": "[15382 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "hidden tests: 9/9 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 9/9 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 9/9 passed (exit 0)"
+        }
+      ],
+      "wallMs": 286357,
+      "subCalls": 3,
+      "costUsd": 0.007382228000000001
+    },
+    "pipeline": {
+      "answer": "[22560 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "hidden tests: 9/9 passed (exit 0)"
+      },
+      "wallMs": 312314,
+      "subCalls": 27,
+      "costUsd": 0.031416403200000005
+    }
+  },
+  {
+    "task": "code-retry",
+    "bucket": "code",
+    "engine": "flash",
+    "baseline": {
+      "answer": "[13374 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "hidden tests: 10/10 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 10/10 passed (exit 0)"
+        },
+        {
+          "score": 1,
+          "detail": "hidden tests: 10/10 passed (exit 0)"
+        }
+      ],
+      "wallMs": 265723,
+      "subCalls": 3,
+      "costUsd": 0.007018071200000001
+    },
+    "pipeline": {
+      "answer": "[23138 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "hidden tests: 10/10 passed (exit 0)"
+      },
+      "wallMs": 392119,
+      "subCalls": 30,
+      "costUsd": 0.03147398240000001
+    }
+  },
+  {
+    "task": "design-dedup-store",
+    "bucket": "design",
+    "engine": "flash",
+    "baseline": {
+      "answer": "[14188 chars, see *.baseline.md]",
+      "score": {
+        "score": 0.9166666666666666,
+        "detail": "mean of 3 samples [1.00, 0.88, 0.88]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "rubric: 8/8 [chunking:+ hashing:+ gc:+ gc-race:+ partial-upload:+ metadata-scale:+ alternative:+ integrity:+]"
+        },
+        {
+          "score": 0.875,
+          "detail": "rubric: 7/8 [chunking:+ hashing:+ gc:+ gc-race:+ partial-upload:+ metadata-scale:- alternative:+ integrity:+]"
+        },
+        {
+          "score": 0.875,
+          "detail": "rubric: 7/8 [chunking:+ hashing:+ gc:+ gc-race:+ partial-upload:+ metadata-scale:- alternative:+ integrity:+]"
+        }
+      ],
+      "wallMs": 306898,
+      "subCalls": 3,
+      "costUsd": 0.0061406072
+    },
+    "pipeline": {
+      "answer": "[14606 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "rubric: 8/8 [chunking:+ hashing:+ gc:+ gc-race:+ partial-upload:+ metadata-scale:+ alternative:+ integrity:+]"
+      },
+      "wallMs": 211780,
+      "subCalls": 19,
+      "costUsd": 0.0097941368
+    }
+  },
+  {
+    "task": "design-rate-limiter",
+    "bucket": "design",
+    "engine": "flash",
+    "baseline": {
+      "answer": "[8000 chars, see *.baseline.md]",
+      "score": {
+        "score": 0.7916666666666666,
+        "detail": "mean of 3 samples [0.75, 0.88, 0.75]"
+      },
+      "samples": [
+        {
+          "score": 0.75,
+          "detail": "rubric: 6/8 [algo:+ atomicity:+ redis-down:- latency:+ hot-keys:+ 429:- alternative:+ observability:+]"
+        },
+        {
+          "score": 0.875,
+          "detail": "rubric: 7/8 [algo:+ atomicity:+ redis-down:+ latency:+ hot-keys:+ 429:- alternative:+ observability:+]"
+        },
+        {
+          "score": 0.75,
+          "detail": "rubric: 6/8 [algo:+ atomicity:+ redis-down:+ latency:+ hot-keys:+ 429:- alternative:+ observability:-]"
+        }
+      ],
+      "wallMs": 268253,
+      "subCalls": 3,
+      "costUsd": 0.005283947200000001
+    },
+    "pipeline": {
+      "answer": "[11973 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "rubric: 8/8 [algo:+ atomicity:+ redis-down:+ latency:+ hot-keys:+ 429:+ alternative:+ observability:+]"
+      },
+      "wallMs": 306712,
+      "subCalls": 21,
+      "costUsd": 0.011356744000000002
+    }
+  },
+  {
+    "task": "design-webhooks",
+    "bucket": "design",
+    "engine": "flash",
+    "baseline": {
+      "answer": "[13201 chars, see *.baseline.md]",
+      "score": {
+        "score": 0.9583333333333334,
+        "detail": "mean of 3 samples [0.88, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 0.875,
+          "detail": "rubric: 7/8 [queue-retry:+ isolation:+ idempotency:+ signing:+ dlq-replay:+ ordering:- alternative:+ observability:+]"
+        },
+        {
+          "score": 1,
+          "detail": "rubric: 8/8 [queue-retry:+ isolation:+ idempotency:+ signing:+ dlq-replay:+ ordering:+ alternative:+ observability:+]"
+        },
+        {
+          "score": 1,
+          "detail": "rubric: 8/8 [queue-retry:+ isolation:+ idempotency:+ signing:+ dlq-replay:+ ordering:+ alternative:+ observability:+]"
+        }
+      ],
+      "wallMs": 239015,
+      "subCalls": 3,
+      "costUsd": 0.004891807200000001
+    },
+    "pipeline": {
+      "answer": "[14027 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "rubric: 8/8 [queue-retry:+ isolation:+ idempotency:+ signing:+ dlq-replay:+ ordering:+ alternative:+ observability:+]"
+      },
+      "wallMs": 536255,
+      "subCalls": 23,
+      "costUsd": 0.018561704
+    }
+  },
+  {
+    "task": "incident-dst-cron",
+    "bucket": "incident",
+    "engine": "flash",
+    "baseline": {
+      "answer": "[7156 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        }
+      ],
+      "wallMs": 113795,
+      "subCalls": 3,
+      "costUsd": 0.0025946592
+    },
+    "pipeline": {
+      "answer": "[6608 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "primary diagnosis correct (confidence high)"
+      },
+      "wallMs": 167688,
+      "subCalls": 18,
+      "costUsd": 0.006839274400000001
+    }
+  },
+  {
+    "task": "incident-pool-leak",
+    "bucket": "incident",
+    "engine": "flash",
+    "baseline": {
+      "answer": "[5052 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        }
+      ],
+      "wallMs": 95461,
+      "subCalls": 3,
+      "costUsd": 0.0021183176000000004
+    },
+    "pipeline": {
+      "answer": "[7987 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "primary diagnosis correct (confidence high)"
+      },
+      "wallMs": 169151,
+      "subCalls": 12,
+      "costUsd": 0.006741028
+    }
+  },
+  {
+    "task": "incident-stampede",
+    "bucket": "incident",
+    "engine": "flash",
+    "baseline": {
+      "answer": "[5151 chars, see *.baseline.md]",
+      "score": {
+        "score": 1,
+        "detail": "mean of 3 samples [1.00, 1.00, 1.00]"
+      },
+      "samples": [
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        },
+        {
+          "score": 1,
+          "detail": "primary diagnosis correct (confidence high)"
+        }
+      ],
+      "wallMs": 92676,
+      "subCalls": 3,
+      "costUsd": 0.0020637008
+    },
+    "pipeline": {
+      "answer": "[6401 chars, see *.pipeline.md]",
+      "score": {
+        "score": 1,
+        "detail": "primary diagnosis correct (confidence high)"
+      },
+      "wallMs": 111529,
+      "subCalls": 15,
+      "costUsd": 0.006185031999999999
+    }
+  }
+]

@@ -1,0 +1,59 @@
+seq: {
+  shape: sequence_diagram
+
+  j_host: "Host model\n(pi session)"
+  ops_tool: "apodex\ntool"
+  ops_pipe: "Pipeline\norchestrator"
+  py_gen: "Generator\n(N parallel)"
+  cpp_node: "node\n(local exec)"
+  py_judge: "Judge\n(worker)"
+  py_grader: "Grader\n(fresh ctx)"
+  py_verif: "Verifier\nroles"
+  py_asm: Assembler
+  db_runs: "Run store\n(artifacts)"
+
+  j_host -> ops_tool: "delegate\nhard task"
+  ops_tool -> ops_pipe: "task +\nbudgets"
+  ops_pipe -> py_judge: "classify\nmode"
+  py_judge -> ops_pipe: "design | code |\nincident | general"
+
+  selection: {
+    label: "stage 1: candidates (code mode, N>1)"
+
+    ops_pipe -> py_gen: "sample N\n(t=0.8, parallel)"
+    py_gen -> ops_pipe: "N candidate\nanswers"
+    ops_pipe -> cpp_node: "run each\nself-test"
+    cpp_node -> ops_pipe: "exit codes +\nverbatim output"
+    ops_pipe -> py_judge: "pairwise compare\n3 axes + evidence"
+    py_judge -> ops_pipe: "winner\n(most wins)"
+  }
+
+  gvr: {
+    label: "stage 2: GVR loop [K rounds, early stop at threshold]"
+
+    ops_pipe -> cpp_node: "exec probe:\nattempt self-test"
+    cpp_node -> ops_pipe: "PASS / FAIL\n+ output"
+    ops_pipe -> py_grader: "task + attempt\n+ exec evidence"
+    py_grader -> ops_pipe: "score 0-100 +\nwritten critique"
+    ops_pipe -> ops_pipe: "FAIL probe ->\ncap score 59,\nno early stop"
+    ops_pipe -> py_gen: "revise: critique +\nverbatim failures"
+    py_gen -> ops_pipe: "revised\nattempt"
+  }
+
+  verify: {
+    label: "stage 3: external verification"
+
+    ops_pipe -> py_verif: "extract claim\natoms (max 14)"
+    py_verif -> ops_pipe: "atom list"
+    ops_pipe -> py_verif: "audit each atom\n(independent ctx)"
+    py_verif -> ops_pipe: "verified |\nunsupported |\ncontradicted"
+    ops_pipe -> py_verif: "holistic audit"
+    py_verif -> ops_pipe: "approve | revise\n| reject"
+  }
+
+  ops_pipe -> py_asm: "best attempt +\naudited atoms\n+ issues"
+  py_asm -> ops_pipe: "final answer\n(evidence-disciplined)"
+  ops_pipe -> db_runs: "persist every\nsub-call + verdict"
+  ops_pipe -> ops_tool: "answer + scores\n+ run dir"
+  ops_tool -> j_host: "result +\naudit trail"
+}

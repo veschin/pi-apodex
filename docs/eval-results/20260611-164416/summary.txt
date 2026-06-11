@@ -1,0 +1,105 @@
+
+=== apodex eval [engine: pro heavy roles] - single-pass baseline (mean of 3) vs verification pipeline ===
+
+task                  bucket    baseline  pipeline  delta    notes
+--------------------------------------------------------------------------------------
+code-intervals        code      1.00      1.00      +0.00    
+code-lru              code      1.00      1.00      +0.00    
+code-retry            code      1.00      1.00      +0.00    
+design-dedup-store    design    1.00      1.00      +0.00    
+design-rate-limiter   design    0.92      0.88      -0.04    
+design-webhooks       design    1.00      1.00      +0.00    
+incident-dst-cron     incident  1.00      1.00      +0.00    
+incident-pool-leak    incident  1.00      1.00      +0.00    
+incident-stampede     incident  1.00      1.00      +0.00    
+--------------------------------------------------------------------------------------
+bucket design         n=3       0.97      0.96      -0.01
+bucket code           n=3       1.00      1.00      +0.00
+bucket incident       n=3       1.00      1.00      +0.00
+OVERALL               n=9       0.99      0.99      -0.00
+
+confidently-wrong incident diagnoses: baseline 0, pipeline 0
+cost: baseline $0.2216 (27 calls), pipeline $0.6914 (220 calls)
+wall: baseline 4066s total, pipeline 6262s total
+
+scoring detail per task:
+  code-intervals:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: hidden tests: 16/16 passed (exit 0)
+  code-lru:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: hidden tests: 9/9 passed (exit 0)
+  code-retry:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: hidden tests: 10/10 passed (exit 0)
+  design-dedup-store:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: rubric: 8/8 [chunking:+ hashing:+ gc:+ gc-race:+ partial-upload:+ metadata-scale:+ alternative:+ integrity:+]
+  design-rate-limiter:
+    baseline: mean of 3 samples [0.88, 0.88, 1.00]
+    pipeline: rubric: 7/8 [algo:+ atomicity:+ redis-down:+ latency:+ hot-keys:+ 429:- alternative:+ observability:+]
+  design-webhooks:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: rubric: 8/8 [queue-retry:+ isolation:+ idempotency:+ signing:+ dlq-replay:+ ordering:+ alternative:+ observability:+]
+  incident-dst-cron:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: primary diagnosis correct (confidence high)
+  incident-pool-leak:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: primary diagnosis correct (confidence high)
+  incident-stampede:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: primary diagnosis correct (confidence high)
+
+
+=== apodex eval [engine: flash heavy roles] - single-pass baseline (mean of 3) vs verification pipeline ===
+
+task                  bucket    baseline  pipeline  delta    notes
+--------------------------------------------------------------------------------------
+code-intervals        code      1.00      1.00      +0.00    
+code-lru              code      1.00      1.00      +0.00    
+code-retry            code      1.00      1.00      +0.00    
+design-dedup-store    design    0.92      1.00      +0.08    
+design-rate-limiter   design    0.79      1.00      +0.21    
+design-webhooks       design    0.96      1.00      +0.04    
+incident-dst-cron     incident  1.00      1.00      +0.00    
+incident-pool-leak    incident  1.00      1.00      +0.00    
+incident-stampede     incident  1.00      1.00      +0.00    
+--------------------------------------------------------------------------------------
+bucket design         n=3       0.89      1.00      +0.11
+bucket code           n=3       1.00      1.00      +0.00
+bucket incident       n=3       1.00      1.00      +0.00
+OVERALL               n=9       0.96      1.00      +0.04
+
+confidently-wrong incident diagnoses: baseline 0, pipeline 0
+cost: baseline $0.0434 (27 calls), pipeline $0.1394 (192 calls)
+wall: baseline 1905s total, pipeline 2439s total
+
+scoring detail per task:
+  code-intervals:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: hidden tests: 16/16 passed (exit 0)
+  code-lru:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: hidden tests: 9/9 passed (exit 0)
+  code-retry:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: hidden tests: 10/10 passed (exit 0)
+  design-dedup-store:
+    baseline: mean of 3 samples [1.00, 0.88, 0.88]
+    pipeline: rubric: 8/8 [chunking:+ hashing:+ gc:+ gc-race:+ partial-upload:+ metadata-scale:+ alternative:+ integrity:+]
+  design-rate-limiter:
+    baseline: mean of 3 samples [0.75, 0.88, 0.75]
+    pipeline: rubric: 8/8 [algo:+ atomicity:+ redis-down:+ latency:+ hot-keys:+ 429:+ alternative:+ observability:+]
+  design-webhooks:
+    baseline: mean of 3 samples [0.88, 1.00, 1.00]
+    pipeline: rubric: 8/8 [queue-retry:+ isolation:+ idempotency:+ signing:+ dlq-replay:+ ordering:+ alternative:+ observability:+]
+  incident-dst-cron:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: primary diagnosis correct (confidence high)
+  incident-pool-leak:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: primary diagnosis correct (confidence high)
+  incident-stampede:
+    baseline: mean of 3 samples [1.00, 1.00, 1.00]
+    pipeline: primary diagnosis correct (confidence high)
