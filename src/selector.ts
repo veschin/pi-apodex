@@ -8,14 +8,13 @@
 // self-test, then by lowest index (deterministic).
 
 import { BudgetExhaustedError } from "./budget.ts";
-import { runCandidateSelfTest } from "./exec.ts";
-import { parseJsonLoose } from "./json.ts";
+import { execEvidenceToText, runCandidateSelfTest } from "./exec.ts";
+import { extractEnumField, parseJsonLoose } from "./json.ts";
 import type { SubCallClient } from "./llm.ts";
 import { JUDGE_SYSTEM, generatorSystem, generatorUser, judgeUser } from "./prompts.ts";
 import type {
   AxisWinner,
   Candidate,
-  ExecEvidence,
   PairVerdict,
   ProgressFn,
   SelectionResult,
@@ -40,23 +39,6 @@ export interface SelectorOptions {
   onProgress?: ProgressFn;
 }
 
-function evidenceText(evidence: ExecEvidence | null): string {
-  if (!evidence) return "(no execution evidence)";
-  if (!evidence.ran) {
-    return `Self-test was NOT executed. Reason: ${evidence.skippedReason ?? "unknown"}.`;
-  }
-  const status = evidence.timedOut
-    ? `TIMED OUT`
-    : `exit code ${evidence.exitCode ?? "unknown"} (${evidence.exitCode === 0 ? "PASS" : "FAIL"})`;
-  return [
-    `Self-test executed: ${status}`,
-    evidence.stdout.trim() ? `--- stdout ---\n${evidence.stdout.trim()}` : "(empty stdout)",
-    evidence.stderr.trim() ? `--- stderr ---\n${evidence.stderr.trim()}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
 function isAxisWinner(value: unknown): value is AxisWinner {
   return value === "a" || value === "b" || value === "tie";
 }
@@ -69,18 +51,35 @@ interface RawVerdict {
   rationale?: unknown;
 }
 
+const AXIS_VALUES = ["a", "b", "tie"] as const;
+
 function parseVerdict(text: string): Omit<PairVerdict, "a" | "b"> | null {
+  // Strict JSON parse first; per-field regex fallback second (a judge once
+  // emitted an unescaped quote inside its rationale - the axis verdicts
+  // themselves are machine-reliable).
   const raw = parseJsonLoose<RawVerdict>(text);
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const { comprehension, causality, grounding, overall } = raw;
-  if (!isAxisWinner(comprehension) || !isAxisWinner(causality) || !isAxisWinner(grounding) || !isAxisWinner(overall)) {
-    return null;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const { comprehension, causality, grounding, overall } = raw;
+    if (isAxisWinner(comprehension) && isAxisWinner(causality) && isAxisWinner(grounding) && isAxisWinner(overall)) {
+      return {
+        axes: { comprehension, causality, grounding },
+        overall,
+        rationale: typeof raw.rationale === "string" ? raw.rationale : "",
+      };
+    }
   }
-  return {
-    axes: { comprehension, causality, grounding },
-    overall,
-    rationale: typeof raw.rationale === "string" ? raw.rationale : "",
-  };
+  const comprehension = extractEnumField(text, "comprehension", AXIS_VALUES);
+  const causality = extractEnumField(text, "causality", AXIS_VALUES);
+  const grounding = extractEnumField(text, "grounding", AXIS_VALUES);
+  const overall = extractEnumField(text, "overall", AXIS_VALUES);
+  if (isAxisWinner(comprehension) && isAxisWinner(causality) && isAxisWinner(grounding) && isAxisWinner(overall)) {
+    return {
+      axes: { comprehension, causality, grounding },
+      overall,
+      rationale: "(rationale unrecoverable from malformed JSON)",
+    };
+  }
+  return null;
 }
 
 async function generateCandidates(opts: SelectorOptions): Promise<Candidate[]> {
@@ -201,7 +200,13 @@ export async function runSelection(opts: SelectorOptions): Promise<SelectionResu
       role: "worker",
       label: `selector.judge.${a.index}v${b.index}`,
       systemPrompt: JUDGE_SYSTEM,
-      userText: judgeUser(opts.task, a.text, evidenceText(a.execEvidence), b.text, evidenceText(b.execEvidence)),
+      userText: judgeUser(
+        opts.task,
+        a.text,
+        execEvidenceToText(a.execEvidence),
+        b.text,
+        execEvidenceToText(b.execEvidence),
+      ),
       temperature: 0,
     });
 

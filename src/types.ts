@@ -108,6 +108,8 @@ export interface GradedAttempt {
   attempt: string;
   critique: Critique | null;
   gradeError?: string;
+  /** Code mode: result of running this attempt's own self-test (exec probe). */
+  execEvidence?: ExecEvidence | null;
 }
 
 export interface GvrResult {

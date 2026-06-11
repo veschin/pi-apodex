@@ -1,36 +1,11 @@
 // Scoring helpers shared by eval tasks.
 
 import { runNodeScript, extractCodeBlocks } from "../src/exec.ts";
-import { parseJsonLoose } from "../src/json.ts";
+import { extractBoolField, extractEnumField } from "../src/json.ts";
 import type { ScoreContext, TaskScore } from "./types.ts";
 
-/**
- * Robust boolean-field extraction from checker output. Checkers sometimes emit
- * structurally invalid JSON (an unescaped quote inside an evidence string broke
- * a real run) while the machine-generated boolean fields remain reliable -
- * fall back to a targeted regex before declaring the check errored.
- */
-export function extractBoolField(text: string, field: string): boolean | null {
-  const parsed = parseJsonLoose<Record<string, unknown>>(text);
-  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && typeof parsed[field] === "boolean") {
-    return parsed[field];
-  }
-  const match = new RegExp(`"${field}"\\s*:\\s*(true|false)`).exec(text);
-  if (match) return match[1] === "true";
-  return null;
-}
-
-/** Same fallback discipline for short string-enum fields. */
-export function extractEnumField(text: string, field: string, values: readonly string[]): string | null {
-  const parsed = parseJsonLoose<Record<string, unknown>>(text);
-  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-    const value = parsed[field];
-    if (typeof value === "string" && values.includes(value)) return value;
-  }
-  const match = new RegExp(`"${field}"\\s*:\\s*"(${values.join("|")})"`).exec(text);
-  if (match && match[1] !== undefined) return match[1];
-  return null;
-}
+// Re-export for tests/tools that imported these from here historically.
+export { extractBoolField, extractEnumField };
 
 // --- code bucket: hidden deterministic tests -------------------------------
 

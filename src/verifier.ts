@@ -9,6 +9,7 @@
 // generator's reasoning and never sees it.
 
 import { BudgetExhaustedError } from "./budget.ts";
+import { execEvidenceToText } from "./exec.ts";
 import { parseJsonLoose, asStringArray } from "./json.ts";
 import type { SubCallClient } from "./llm.ts";
 import {
@@ -43,17 +44,7 @@ function isAtomVerdict(value: unknown): value is AtomVerdict {
   return typeof value === "string" && (ATOM_VERDICTS as readonly string[]).includes(value);
 }
 
-function execEvidenceText(evidence: ExecEvidence | null): string {
-  if (!evidence) return "(none)";
-  if (!evidence.ran) return `Self-test not executed: ${evidence.skippedReason ?? "unknown reason"}`;
-  return [
-    `Self-test executed, exit code ${evidence.exitCode ?? "unknown"}${evidence.timedOut ? " (TIMED OUT)" : ""}`,
-    evidence.stdout.trim() ? `--- stdout ---\n${evidence.stdout.trim()}` : "(empty stdout)",
-    evidence.stderr.trim() ? `--- stderr ---\n${evidence.stderr.trim()}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
+const execEvidenceText = execEvidenceToText;
 
 interface RawAtom {
   claim?: unknown;

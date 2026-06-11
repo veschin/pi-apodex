@@ -146,6 +146,24 @@ export async function runNodeScript(req: ExecRequest): Promise<ExecEvidence> {
   }
 }
 
+/** Single source of truth for rendering exec evidence into prompts. */
+export function execEvidenceToText(evidence: ExecEvidence | null): string {
+  if (!evidence) return "(no execution evidence)";
+  if (!evidence.ran) {
+    return `Self-test was NOT executed. Reason: ${evidence.skippedReason ?? "unknown"}.`;
+  }
+  const status = evidence.timedOut
+    ? "TIMED OUT"
+    : `exit code ${evidence.exitCode ?? "unknown"} (${evidence.exitCode === 0 ? "PASS" : "FAIL"})`;
+  return [
+    `Self-test executed: ${status}`,
+    evidence.stdout.trim() ? `--- stdout ---\n${evidence.stdout.trim()}` : "(empty stdout)",
+    evidence.stderr.trim() ? `--- stderr ---\n${evidence.stderr.trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 const SOLUTION_BLOCK = /```(?:js|javascript|mjs)\s+solution\s*\n([\s\S]*?)```/;
 const SELFTEST_BLOCK = /```(?:js|javascript|mjs)\s+selftest\s*\n([\s\S]*?)```/;
 

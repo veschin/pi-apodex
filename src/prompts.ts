@@ -103,6 +103,14 @@ Scoring bands (0-100, integer):
 - 25-49: multiple substantive violations or a likely-wrong core approach.
 - 0-24: pseudo-answer: pattern-matched, placeholder-ridden, or fundamentally wrong.
 
+When an "Execution evidence" section is present, it is ground truth about
+observed behavior and outweighs any prose claim in the candidate:
+- a FAILED or TIMED-OUT self-test is a substantive defect (50-74 band at best);
+  name the failing checks in violations and make fixing them the first
+  revision directives, quoting the relevant output lines;
+- a PASSING self-test verifies only what the test actually checks - still audit
+  whether the test covers the task's stated requirements.
+
 Return ONLY a JSON object, no markdown fences, with exactly these fields:
 {
   "score": <integer 0-100>,
@@ -111,14 +119,21 @@ Return ONLY a JSON object, no markdown fences, with exactly these fields:
   "revision_directives": ["<specific, actionable instructions that would raise the score, ordered by impact>"]
 }`;
 
-export function graderUser(task: string, candidate: string): string {
+export function graderUser(task: string, candidate: string, execEvidence?: string): string {
+  const evidenceSection = execEvidence
+    ? `
+
+# Execution evidence (the candidate's own self-test, executed locally)
+
+${execEvidence}`
+    : "";
   return `# Task
 
 ${task}
 
 # Candidate answer to grade
 
-${candidate}`;
+${candidate}${evidenceSection}`;
 }
 
 export const JUDGE_SYSTEM = `You are an evidence judge comparing two candidate answers (A and B) to the same task.

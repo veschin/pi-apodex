@@ -59,3 +59,31 @@ export function asStringArray(value: unknown, maxItems: number, maxLen: number):
     .slice(0, maxItems)
     .map((s) => (s.length > maxLen ? `${s.slice(0, maxLen)}...` : s));
 }
+
+/**
+ * Robust boolean-field extraction from model output. Models occasionally emit
+ * structurally invalid JSON (an unescaped quote inside a string broke a real
+ * eval run) while machine-generated boolean fields stay reliable - fall back
+ * to a targeted regex before declaring the output unusable.
+ */
+export function extractBoolField(text: string, field: string): boolean | null {
+  const parsed = parseJsonLoose<Record<string, unknown>>(text);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && typeof parsed[field] === "boolean") {
+    return parsed[field];
+  }
+  const match = new RegExp(`"${field}"\\s*:\\s*(true|false)`).exec(text);
+  if (match) return match[1] === "true";
+  return null;
+}
+
+/** Same fallback discipline for short string-enum fields. */
+export function extractEnumField(text: string, field: string, values: readonly string[]): string | null {
+  const parsed = parseJsonLoose<Record<string, unknown>>(text);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const value = parsed[field];
+    if (typeof value === "string" && values.includes(value)) return value;
+  }
+  const match = new RegExp(`"${field}"\\s*:\\s*"(${values.join("|")})"`).exec(text);
+  if (match && match[1] !== undefined) return match[1];
+  return null;
+}

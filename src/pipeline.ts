@@ -144,7 +144,8 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
       seedAttempt = winner?.text;
     }
 
-    // --- Stage 2: GVR ---
+    // --- Stage 2: GVR (with per-round exec probe in code mode) ---
+    const execProbeEnabled = mode === "code" && opts.config.exec.enabled;
     gvr = await runGvr({
       client,
       task,
@@ -152,6 +153,9 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
       rounds: opts.config.rounds,
       scoreThreshold: opts.config.scoreThreshold,
       ...(seedAttempt !== undefined ? { seedAttempt } : {}),
+      ...(execProbeEnabled
+        ? { execProbe: (attempt: string) => runCandidateSelfTest(attempt, opts.config.exec.timeoutMs) }
+        : {}),
       ...(opts.onProgress !== undefined ? { onProgress: opts.onProgress } : {}),
     });
     store.writeJson(
@@ -162,17 +166,25 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
         critique: a.critique,
         gradeError: a.gradeError ?? null,
         attemptChars: a.attempt.length,
+        execProbe: a.execEvidence
+          ? {
+              ran: a.execEvidence.ran,
+              exitCode: a.execEvidence.exitCode,
+              timedOut: a.execEvidence.timedOut,
+              skippedReason: a.execEvidence.skippedReason ?? null,
+            }
+          : null,
       })),
     );
     finalAnswer = gvr.best.attempt;
 
     // --- Stage 3: execution evidence for the best attempt (code mode) ---
-    let bestExecEvidence: ExecEvidence | null = null;
-    if (mode === "code") {
+    // The GVR exec probe already produced evidence for the best attempt; fall
+    // back to the selector winner's evidence, then to a fresh run.
+    let bestExecEvidence: ExecEvidence | null = gvr.best.execEvidence ?? null;
+    if (mode === "code" && !bestExecEvidence) {
       if (selection) {
         const winner = selection.candidates.find((c) => c.index === selection?.winnerIndex);
-        // The GVR loop may have revised the answer; re-run the self-test when the
-        // text changed, otherwise reuse the selector's evidence.
         if (winner && winner.text === finalAnswer && winner.execEvidence) {
           bestExecEvidence = winner.execEvidence;
         }

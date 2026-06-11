@@ -100,3 +100,40 @@ GVR gains concentrate where the base score is LOW (IMO-ProofBench Advanced
 run 2 measures two engines - pro (expected ~saturated, reported honestly) and
 flash in heavy roles (low base, where the verification team has headroom) -
 with baseline = mean of 3 samples (single-pass failure is a frequency).
+
+## 2026-06-11 - Run 2 (results/20260611-164416): measured uplift + analysis
+
+Definitive two-engine run (9 tasks, K=4, N=4, baseline = mean of 3):
+
+- flash heavy roles: overall 0.96 -> 1.00 (+0.04); design bucket 0.89 -> 1.00
+  (+0.11) with unstable baselines (e.g. 0.75/0.88/0.75) lifted to 1.00 every
+  time. flash+pipeline matched pro single-pass quality (1.00 vs 0.99) at
+  ~$0.0155/task vs ~$0.0082/answer - the weak-engine cascade story holds.
+- pro heavy roles: 0.99 -> 0.99. Saturated task set, reported flat, honestly.
+  The -0.04 on design-rate-limiter is inside that task's own baseline spread
+  (samples 0.88/0.88/1.00; the failed "429" rubric item was a legitimate
+  judgment, not a checker error).
+- eval/analyze-run.ts on run 2: 0 defects, 6 risks (3 wall-cap near misses at
+  93-109%; 2 revision regressions, e.g. 85 -> 35 on flash webhooks, absorbed by
+  best-tracking; 1 malformed judge verdict conservatively treated as tie).
+
+## 2026-06-11 - Improvement batch from run-2 analysis + research survey
+
+Research survey (docs/research/test-time-boosting.md, ~130 sources) landed;
+its consensus "models fix LOCATED errors, not described ones" plus the run-1
+finding that the grader was blind to available execution evidence produced:
+
+- GVR exec probe (code mode): each round runs the attempt's own self-test;
+  verbatim output goes to the grader (ground truth section in the prompt) and
+  to the reviser (appended to the critique); a failing/timed-out probe caps
+  the round score at 59 deterministically, which also suppresses early-stop
+  on observed-broken code. Verified live (probe recorded in gvr.json, evidence
+  present in grader prompt, $0.006 flash smoke) and deterministically (stubbed
+  client: lenient 95 capped to 59, early-stop suppressed, reviser received the
+  verbatim failing check).
+- Judge verdict parsing hardened with per-field enum regex fallback (the run-2
+  "unparseable verdict -> tie" case now recovers the axis verdicts).
+- extractBoolField/extractEnumField consolidated into src/json.ts; the three
+  duplicate exec-evidence renderers consolidated into exec.ts.
+- README: measured-results section (both engines, honest reading) and a
+  research-backed v2 roadmap replacing the ad-hoc deferred list.

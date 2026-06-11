@@ -7,6 +7,7 @@
 // this from degenerating into best-of-K sampling.
 
 import { BudgetExhaustedError } from "./budget.ts";
+import { execEvidenceToText } from "./exec.ts";
 import { parseJsonLoose, asBoundedInt, asStringArray } from "./json.ts";
 import type { SubCallClient } from "./llm.ts";
 import {
@@ -16,7 +17,7 @@ import {
   graderUser,
   reviserUser,
 } from "./prompts.ts";
-import type { Critique, GradedAttempt, GvrResult, ProgressFn, TaskMode } from "./types.ts";
+import type { Critique, ExecEvidence, GradedAttempt, GvrResult, ProgressFn, TaskMode } from "./types.ts";
 
 export class GvrError extends Error {
   constructor(message: string) {
@@ -70,9 +71,19 @@ export interface GvrOptions {
   scoreThreshold: number;
   /** Optional starting attempt (e.g. the selector winner). */
   seedAttempt?: string;
+  /**
+   * Code mode: runs the attempt's own self-test and returns the evidence.
+   * The verbatim output is fed to the grader (ground truth about behavior)
+   * and to the reviser (models fix LOCATED errors far better than described
+   * ones); a failing/timed-out probe caps the round score at 59
+   * deterministically so a lenient grader cannot early-stop on broken code.
+   */
+  execProbe?: (attempt: string) => Promise<ExecEvidence>;
   onProgress?: ProgressFn;
   labelPrefix?: string;
 }
+
+const EXEC_FAIL_SCORE_CAP = 59;
 
 /**
  * Grade with one bounded re-ask on JSON-parse failure. Two grade failures in a
@@ -82,13 +93,14 @@ async function gradeAttempt(
   opts: GvrOptions,
   attempt: string,
   round: number,
+  evidenceText: string | undefined,
 ): Promise<{ critique: Critique | null; error?: string }> {
   const label = `${opts.labelPrefix ?? "gvr"}.grade.r${round}`;
   const first = await opts.client.call({
     role: "grader",
     label,
     systemPrompt: GRADER_SYSTEM,
-    userText: graderUser(opts.task, attempt),
+    userText: graderUser(opts.task, attempt, evidenceText),
   });
   if (first.ok) {
     const critique = parseCritique(first.text);
@@ -99,7 +111,7 @@ async function gradeAttempt(
     role: "grader",
     label: `${label}.retry`,
     systemPrompt: GRADER_SYSTEM,
-    userText: `${graderUser(opts.task, attempt)}\n\nIMPORTANT: your previous reply was not parseable. Return ONLY the JSON object described in your instructions - no prose, no markdown fences.`,
+    userText: `${graderUser(opts.task, attempt, evidenceText)}\n\nIMPORTANT: your previous reply was not parseable. Return ONLY the JSON object described in your instructions - no prose, no markdown fences.`,
   });
   if (second.ok) {
     const critique = parseCritique(second.text);
@@ -136,13 +148,39 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
         currentAttempt = gen.text;
       }
 
-      // 2. Grade it in a fresh context.
+      // 2. Execution probe (code mode): objective evidence about THIS attempt.
+      let evidence: ExecEvidence | null = null;
+      if (opts.execProbe) {
+        opts.onProgress?.(`GVR round ${round}/${opts.rounds}: running self-test probe`);
+        evidence = await opts.execProbe(currentAttempt);
+      }
+      const probeFailed = evidence !== null && evidence.ran && (evidence.exitCode !== 0 || evidence.timedOut);
+
+      // 3. Grade it in a fresh context (evidence attached when available).
       opts.onProgress?.(`GVR round ${round}/${opts.rounds}: grading`);
-      const graded = await gradeAttempt(opts, currentAttempt, round);
+      const graded = await gradeAttempt(
+        opts,
+        currentAttempt,
+        round,
+        evidence ? execEvidenceToText(evidence) : undefined,
+      );
+      // Deterministic cap: observed failing behavior is a substantive defect
+      // regardless of how lenient the grader felt.
+      if (graded.critique && probeFailed && graded.critique.score > EXEC_FAIL_SCORE_CAP) {
+        graded.critique = {
+          ...graded.critique,
+          score: EXEC_FAIL_SCORE_CAP,
+          violations: [
+            ...graded.critique.violations,
+            `self-test FAILED at runtime (${evidence?.timedOut ? "timeout" : `exit ${evidence?.exitCode}`}); score capped at ${EXEC_FAIL_SCORE_CAP}`,
+          ],
+        };
+      }
       const attempt: GradedAttempt = {
         round,
         attempt: currentAttempt,
         critique: graded.critique,
+        execEvidence: evidence,
       };
       if (graded.error !== undefined) attempt.gradeError = graded.error;
       attempts.push(attempt);
@@ -172,7 +210,9 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
         }
       }
 
-      // 3. Revise for the next round, steered by the written critique.
+      // 4. Revise for the next round, steered by the written critique plus the
+      // VERBATIM execution output - models repair located errors far more
+      // reliably than described ones.
       if (round < opts.rounds) {
         if (!lastCritique) {
           // No critique at all yet -> a revision would just re-sample; regenerate
@@ -181,11 +221,15 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
           continue;
         }
         opts.onProgress?.(`GVR round ${round}/${opts.rounds}: revising per critique`);
+        let critiqueText = critiqueToText(lastCritique);
+        if (evidence && evidence.ran) {
+          critiqueText += `\n\nExecution evidence for the attempt (verbatim self-test output):\n${execEvidenceToText(evidence)}`;
+        }
         const revision = await opts.client.call({
           role: "generator",
           label: `${opts.labelPrefix ?? "gvr"}.revise.r${round}`,
           systemPrompt: generatorSystem(opts.mode),
-          userText: reviserUser(opts.task, currentAttempt, critiqueToText(lastCritique)),
+          userText: reviserUser(opts.task, currentAttempt, critiqueText),
           temperature: 0.4,
         });
         if (!revision.ok) {
