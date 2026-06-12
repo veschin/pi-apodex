@@ -5,80 +5,82 @@ kind: guide
 
 # Handoff
 
-State as of commit `16eb32b` (main, pushed to
-https://github.com/veschin/pi-apodex), 2026-06-11 evening.
+State as of 2026-06-12: context + delivery stages, judge/scout roles, and
+stage transparency implemented and verified locally; NOT yet committed when
+this file was written - the session ends with the commit(s). Previous
+published state: commit `6f684ab` (main, https://github.com/veschin/pi-apodex).
 
-## What exists (verified)
+## What exists (verified this session)
 
-- Full pipeline (selector -> GVR with exec probe -> claim audit -> assembly)
-  working on all three surfaces: model-initiated tool, `/apodex` command,
-  standalone (`eval/smoke-pipeline.ts`).
-- **Delivery contract**: spend summary (cost/sub-calls/tokens in-out/wall) +
-  inline answer <=1500 chars, else `<runDir>/final.md` path + preview + NEXT
-  STEP directive; `/apodex` result wakes the session model (triggerTurn) to
-  finish the user's request. File branch + token split verified headless;
-  the TUI wake-up needs interactive confirmation after the user's `/reload`
-  (see [40_extension.md](40_extension.md)).
-- Installed for the user via symlink `~/.pi/agent/extensions/pi-apodex` -
-  auto-discovered by plain `pi` (verified by headless tool listing).
-- Reported eval `docs/eval-results/20260611-164416`: flash 0.96 -> 1.00
-  (design 0.89 -> 1.00), pro 0.99 -> 0.99 (ceiling). Analyzer: 0 defects.
-- tsc clean; selfcheck passes; 11 conventional commits; README is a
-  paper-style document with diagram and one-liner install.
+- **Full pipeline**: scout context gathering -> mode classify (sees
+  materials) -> [code: N candidates -> exec -> pairwise judge] -> GVR ->
+  claim audit -> assembly -> delivery plan + handoff.md. All stage events are
+  `[stage]`-prefixed, a `[team] role=model` roster opens every run,
+  progress.jsonl persists the timeline.
+- **Workspace context stage** (`src/context.ts`): the answer to the first
+  external-user feedback ("apodex can't read the repo, no pi integration").
+  Scout requests listing paths as JSON; the orchestrator reads them
+  (containment + realpath guards, binary sniff, credential deny list,
+  16 KB/file, 48 KB/pack, <=2 rounds). Verified: `eval/smoke-context.ts` -
+  repo question -> src/json.ts gathered first, grounded answer, score
+  95-100, approve, ~$0.02.
+- **Delivery stage** (`src/delivery.ts`): task shape + apply steps / key
+  points / open items; delivery.json + deterministic handoff.md;
+  composeDelivery always shows final.md + handoff.md paths and a
+  shape-specific NEXT STEP on every channel.
+- **judge/scout roles**: `APODEX_JUDGE` / `APODEX_SCOUT` / `.apodex.json`;
+  unset models mirror the final worker model. Verified via subcalls.jsonl
+  (judge on pro while everything else flash).
+- Eval protocol pinned (context+delivery OFF in the pipeline arm,
+  eval/run-eval.ts) - published numbers `docs/eval-results/20260611-164416`
+  stay comparable. tsc clean; selfcheck passes; headless pi lists the tool.
 
 ## What does NOT exist
 
-- No dedicated **judge/grader model bindings** - judge, classifier,
-  extractor, auditors all share the single `worker` role (see backlog #1).
 - No abort for `/apodex`-launched runs (signal undefined in command context);
-  Esc only works for the tool path.
-- No detached runs: killing pi kills in-flight runs (artifacts survive;
-  final.md does not).
+  Esc only works for the tool path. No double-submit debounce either.
+- No detached runs: killing pi kills in-flight runs.
 - No web-grounded verification, no sandbox, no cross-family judge panel, no
-  consistency-gated cascade (survey-backed roadmap in README §9).
-- Pipeline eval arm is single-sample; publication-batch critic round was
-  interrupted by the user and never re-run (see Agent errors).
+  consistency-gated cascade (README §9 roadmap).
+- No prompt-injection defense beyond framing: a hostile workspace file
+  becomes trusted material (accepted at single-user scale; devlog 02).
+- README §3 method description predates the context/delivery stages.
 
 ## Current problems (user-facing, live)
 
-1. The user's first interactive test (session in `~/ai/game`) launched two
-   concurrent runs of a giant task ("MVP Minecraft") at 22:20/22:22; they die
-   with that pi session and their results post only into it. The UX fix
-   (launch echo + progress widget, commit 16eb32b) shipped AFTER his session
-   started - he must `/reload` (when no runs are in flight) to get it.
-2. Double-Enter creates duplicate runs - no debounce/queue on the command
-   path.
-3. Huge monolithic tasks produce mediocre value per dollar; the tool
-   description now states the answer-not-implementation contract, but
-   task-splitting guidance still lives only in chat advice.
-4. The user's live session predates the delivery/auto-continue changes; the
-   TUI wake-up (`triggerTurn`) is unverified interactively until he
-   `/reload`s and runs one `/apodex`.
+1. The user's live pi session predates ALL of this; he must `/reload` (when
+   no runs are in flight) to get the new extension code, then run one
+   `/apodex` to interactively confirm the triggerTurn wake-up (still only
+   verified headless).
+2. Other users' sessions likewise need a fresh `pi install` /
+   `git pull` of the extension.
+3. Huge monolithic tasks still produce mediocre value per dollar -
+   task-splitting guidance lives only in the tool description.
 
 ## Next options (user picks; not a queue)
 
-- **A. Dedicated judge role + cross-family panel (~1-2 h).** Add
-  `judge`/`grader` as first-class configurable roles (today: judge ⊂ worker;
-  the user explicitly wants "another model as judge"). Then optional
-  N-vote panel with majority (survey: flash-class judges near random on hard
-  pairs; PoLL-style panels beat a single big judge at 7-8× less cost).
+- **A. Cross-family judge panel (~0.5 d).** judge role exists; add N-vote
+  majority with per-vote artifacts (survey: PoLL panels beat a single big
+  judge at 7-8x less cost).
 - **B. Consistency-gated cascade (~0.5-1 d).** Candidate agreement as a free
-  confidence signal: agree -> fewer rounds/shallower verification; disagree ->
-  escalate flash->pro. Highest expected value per dollar in the survey.
-- **C. Detached runs (~0.5 d).** Run the pipeline in a spawned process with
-  result delivery on session return; fixes problem 1 and the kill-pi case.
-- **D. Command-path abort + double-submit guard (~1 h).** Wire an
-  AbortController into the `/apodex` handler with a `/apodex-stop` command;
-  ignore a second submit while one is queued.
+  confidence signal; highest expected value per dollar in the survey.
+- **C. Command-path abort + double-submit guard (~1 h).** AbortController in
+  the `/apodex` handler + `/apodex-stop`; ignore a second submit while one
+  is queued.
+- **D. Detached runs (~0.5 d).** Spawned-process pipeline with result
+  delivery on session return.
+- **E. README §3 refresh (~1 h).** Fold the context/delivery stages into the
+  method description + diagram.
 
 ## Read order
 
 1. This file.
-2. [20_pipeline.md](20_pipeline.md) - invariants before touching any stage.
-3. [30_subcall_infra.md](30_subcall_infra.md) + [40_extension.md](40_extension.md)
-   as needed for the chosen option.
+2. [20_pipeline.md](20_pipeline.md) - invariants 13-16 are new (context,
+   scout discipline, delivery, classifier materials).
+3. [30_subcall_infra.md](30_subcall_infra.md) - six roles + mirroring;
+   [40_extension.md](40_extension.md) - new delivery contract.
 4. [50_eval.md](50_eval.md) + [90_lessons.md](90_lessons.md) before running
-   or trusting any measurement.
+   or trusting any measurement; note the protocol pin.
 
 ## Smoke test (run before touching anything)
 
@@ -87,22 +89,28 @@ cd ~/ai/pi-apodex && npx tsc --noEmit && npx tsx eval/selfcheck.ts
 # expected: no tsc output; selfcheck prints 6 OK lines ending with
 # "SELFCHECK PASSED: hidden tests are sound"
 
+npx tsx eval/smoke-context.ts
+# expected: "SMOKE-CONTEXT PASSED" - scout gathers src/json.ts from this
+# repo, artifacts + stage prefixes asserted (~80 s, ~$0.02, all-flash)
+
 cd /tmp && pi -p --no-session --no-skills --no-context-files \
   --provider deepseek --model deepseek-v4-flash \
   "Reply with only the comma-separated names of your custom tools."
-# expected: a list containing "apodex" (extension auto-discovered via symlink)
+# expected: a list containing "apodex"
 ```
 
-Optional full-pipeline smoke (~90 s, ~$0.01): `APODEX_GENERATOR=... -flash`
-env trio + `npx tsx eval/smoke-pipeline.ts` - expect `best score: 100`,
-`holistic: approve`, exec probe recorded in the run's gvr.json.
+Optional code-path smoke (~85 s, ~$0.01): `APODEX_GENERATOR/GRADER/VERIFIER=
+...-flash npx tsx eval/smoke-pipeline.ts` - expect scout skip
+("self-contained"), early stop, task shape implementation.
 
 ## Agent errors to log
 
-1. The final critic round over the publication batch (README/LICENSE/
-   packaging) was interrupted by the user and **not re-run** - README factual
-   claims were self-checked against artifacts, but the adversarial pass is
-   missing.
-2. Mid-session a relative-path `mkdir`/`cp` ran from the wrong cwd
-   (docs/diagrams) and created a stray tree; caught and removed the same
-   minute. Rule: absolute paths in multi-step shell work.
+1. (carried over, still open) The final critic round over the publication
+   batch (README/LICENSE/packaging) was interrupted by the user on 2026-06-11
+   and never re-run; README factual claims were self-checked only.
+2. This session's critic round caught a real cross-file bug pattern twice
+   missed during implementation: a new shared input (`materials`) was wired
+   into most-but-not-all consumers (classifier missed), and a tracking flag
+   (`explicitRoles`) conflated "any field applied" with "model applied".
+   Rule reinforced: after introducing a shared value, grep EVERY call site of
+   the thing it replaces before declaring the wiring done.
