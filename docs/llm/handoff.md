@@ -75,6 +75,27 @@ judgment, eval judge pin diverges from in-session defaults.
    apodex-clarification messages).
 2. Huge monolithic tasks: the analyst now negotiates slicing in the brief,
    but the user still slices projects manually across runs.
+3. **Cross-run context (backlog, 2026-06-12, live incident)**: runs are
+   stateless and the calling model does not realize it - a follow-up
+   "имплементируй диздок" arrived without the previous run's design doc
+   (run-20260612-163401); the analyst correctly paused, the session model had
+   to be told to inline the prior final.md. Fix directions: state
+   STATELESSNESS explicitly in the tool/task param descriptions ("no memory
+   of previous runs or this chat - inline prior outputs"), have
+   composeDelivery advertise "reference <runDir>/final.md in follow-up
+   tasks", and/or let the scout see runsDir artifacts (.apodex/runs is
+   gitignored, so invisible to the listing today).
+4. **Browser/visual tasks have no verification path (backlog, 2026-06-12,
+   live incident)**: the user fed a Three.js/WebGL single-HTML design doc;
+   the pipeline can only run node self-tests, so there is NO execution
+   evidence for browser code - the session model correctly bailed and
+   implemented it directly ("apodex зациклился ... реализую сам"). The
+   analyst asks about format but has no verdict for "this task does not fit
+   the pipeline - implement outside it"; its outcomes are only questions /
+   ready. Fix directions: add an analyst verdict "unfit" (with the reason)
+   that tells the caller to implement directly rather than looping; OR a
+   browser/headless runner (ties into option F sandbox); until then, the
+   honest answer for GUI/visual work is "don't route it through apodex".
 
 ## Next options (user picks; not a queue)
 
