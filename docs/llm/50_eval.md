@@ -19,6 +19,14 @@ See also: [20_pipeline.md](20_pipeline.md) · [90_lessons.md](90_lessons.md).
 - Engines: `--engine pro|flash|both` swaps the heavy roles
   (deepseek-v4-pro / -flash); worker is always flash in both arms.
 - Eval safety caps per pipeline run: 20 min wall, $3.
+- **Protocol pin (2026-06-12)**: the pipeline arm runs with
+  `context.enabled=false` and `delivery.planEnabled=false`
+  (eval/run-eval.ts). Eval tasks are self-contained; the workspace context
+  stage would feed repository files absent from the baseline arm (an
+  uncontrolled confound), and the planner adds calls without touching the
+  answer. This keeps post-2026-06-12 runs comparable with the published
+  `docs/eval-results/20260611-164416`. The context/delivery stages are
+  covered by `eval/smoke-context.ts` instead.
 
 ## Buckets and checks (eval/tasks/)
 
@@ -53,6 +61,7 @@ See also: [20_pipeline.md](20_pipeline.md) · [90_lessons.md](90_lessons.md).
 npx tsx eval/run-eval.ts --engine both --concurrency 3   # full, ~2h, ~$1.10
 npx tsx eval/run-eval.ts --smoke                          # 1 task/bucket
 npx tsx eval/run-eval.ts --only retry --rounds 2 --candidates 2
+npx tsx eval/smoke-context.ts   # context+delivery stages, repo-grounded, ~80s, ~$0.02
 ```
 
 Outputs: `eval/results/<stamp>/` (gitignored) - summary.txt, results.json,

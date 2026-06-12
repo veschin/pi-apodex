@@ -15,11 +15,13 @@ generate-verify-revise -> claim-level external audit -> evidence-disciplined
 assembly). It raises answer reliability on hard engineering tasks by spending
 extra budget-capped LLM sub-calls, not by changing or training models.
 
-## Verifiable current state (2026-06-11)
+## Verifiable current state (2026-06-12)
 
 - `npx tsc --noEmit` - clean, strict mode.
 - `npx tsx eval/selfcheck.ts` - passes: 3 reference solutions score 1.00,
   3 broken variants score 0.50-0.56 on the hidden tests.
+- `npx tsx eval/smoke-context.ts` - passes: repo-grounded question, scout
+  gathers src/json.ts, grounded answer, all stage artifacts present.
 - Reported evaluation: `docs/eval-results/20260611-164416/` - flash engine
   0.96 -> 1.00 overall (design 0.89 -> 1.00), pro engine 0.99 -> 0.99
   (saturated, reported honestly).
@@ -37,9 +39,13 @@ extra budget-capped LLM sub-calls, not by changing or training models.
    local `node` in a temp dir as an *evidence channel*; it is NOT a boundary
    against untrusted code.
 4. **Web-grounded verification** - atoms are audited against task-internal
-   materials only. (Roadmap item; survey: docs/research/test-time-boosting.md.)
+   materials only (which since 2026-06-12 includes the workspace context
+   pack). (Roadmap item; survey: docs/research/test-time-boosting.md.)
 5. **Tool-using sub-agents** - sub-calls are tool-less single-turn
-   completions by design (cost + isolation).
+   completions by design (cost + isolation). The workspace context stage does
+   NOT breach this: the scout only names paths as JSON and the ORCHESTRATOR
+   performs the reads deterministically (src/context.ts; see
+   [20_pipeline.md](20_pipeline.md) invariants 13-14).
 6. **Detached/background runs** - a pipeline run lives inside the invoking
    process (pi session or tsx); killing the process kills the run.
 

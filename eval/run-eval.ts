@@ -177,9 +177,19 @@ async function runPipelineArm(
   registry: ReturnType<typeof createStandaloneRegistry>,
 ): Promise<{ answer: string; wallMs: number; subCalls: number; costUsd: number; error?: string }> {
   const t0 = Date.now();
+  // Protocol pin: eval tasks are self-contained by design. The workspace
+  // context stage would feed repository files absent from the baseline arm
+  // (an uncontrolled confound), and the delivery planner adds calls without
+  // touching the answer - both stay OFF so pipeline-vs-baseline isolates the
+  // reasoning loop, comparable with the published runs.
+  const pinnedConfig: ApodexConfig = {
+    ...config,
+    context: { ...config.context, enabled: false },
+    delivery: { ...config.delivery, planEnabled: false },
+  };
   try {
     const result = await runApodex({
-      config,
+      config: pinnedConfig,
       configWarnings,
       registry,
       task: task.prompt,

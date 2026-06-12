@@ -17,7 +17,8 @@ code - never aspirational.
   (read before adding any new capability).
 - [20_pipeline.md](20_pipeline.md) - the verification pipeline's stage
   contracts and numbered invariants (read before touching src/gvr.ts,
-  src/selector.ts, src/verifier.ts, src/pipeline.ts, src/prompts.ts).
+  src/selector.ts, src/verifier.ts, src/pipeline.ts, src/prompts.ts,
+  src/context.ts, src/delivery.ts).
 - [30_subcall_infra.md](30_subcall_infra.md) - sub-call client, roles,
   budgets, config precedence, artifact store (read before touching
   src/llm.ts, src/roles.ts, src/budget.ts, src/config.ts, src/store.ts,

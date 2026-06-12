@@ -27,17 +27,28 @@ See also: [20_pipeline.md](20_pipeline.md) · [40_extension.md](40_extension.md)
 
 ## Roles (src/roles.ts)
 
-- Roles: `generator | grader | verifier | worker`. Spec value is `"session"`
-  or `"<provider>/<model-id>"`.
+- Roles: `generator | grader | verifier | worker | judge | scout`. Spec value
+  is `"session"` or `"<provider>/<model-id>"`.
+- **judge** = the pairwise selection judge (`selector.judge.*` calls);
+  **scout** = the workspace context gatherer (`context.scout.*` calls). Both
+  are bindable via `.apodex.json` roles or `APODEX_JUDGE` / `APODEX_SCOUT`.
+- **Mirroring**: judge/scout without an explicitly set VALID model mirror the
+  FINAL worker model (after all overrides), so cheapening the worker moves
+  them too. Non-model fields (temperature/thinking/maxTokens) can be
+  customized without pinning the model (`applyRoleOverride` returns
+  model-applied, src/config.ts).
 - Resolution order: pinned model -> registry lookup; `"session"` -> session
   model -> `DEFAULT_HEAVY_MODEL` (deepseek-v4-pro). Pinned-but-unavailable
   falls back to the session model **with a surfaced `fallbackNote`** - silent
   degradation is forbidden.
 - Resolution (incl. fallback) is **cached per run** by design: one run
   behaves consistently; recovery applies from the next run's fresh resolver.
-- The pairwise judge, mode classifier, claim extractor, atom auditors, and
-  eval rubric/diagnosis checkers all run under the **worker** role. There is
-  no dedicated judge role yet (backlog - see handoff).
+  The `[team]` roster line resolves all six roles at run start; a roster
+  resolution failure prints `role=ERR(...)` and only throws when that role is
+  actually called.
+- The mode classifier, claim extractor, atom auditors, delivery planner
+  (`deliver.plan`, 1 call + bounded re-ask), and eval rubric/diagnosis
+  checkers all run under the **worker** role.
 
 ## Budget (src/budget.ts)
 
@@ -49,15 +60,24 @@ in flight may overshoot the cap (observed 109%; predictive stop is backlog).
 ## Config (src/config.ts)
 
 Precedence: defaults ← `.apodex.json` (cwd) ← `APODEX_*` env ← inline
-overrides (tool params). Everything numeric is clamped (`CLAMPS` table) with
-warnings collected, never silently. K rounds 1..10, N candidates 1..8.
-Defaults: K=4, N=4, threshold 92, heavy roles = session, worker =
-deepseek-v4-flash.
+overrides (tool params) ← judge/scout worker-mirroring (step 3.5). Everything
+numeric is clamped (`CLAMPS` table) with warnings collected, never silently.
+K rounds 1..10, N candidates 1..8. Defaults: K=4, N=4, threshold 92, heavy
+roles = session, worker/judge/scout = deepseek-v4-flash.
+
+New blocks (2026-06-12): `context` (enabled, maxRounds 1..4 = 2, maxFiles
+1..40 = 16, maxFileBytes = 16 KB, maxTotalBytes = 48 KB, maxListingEntries =
+1500; env `APODEX_CONTEXT_ENABLED` / `APODEX_CONTEXT_MAX_*`) and `delivery`
+(planEnabled, env `APODEX_DELIVERY_PLAN`). The 48 KB pack rides along in
+EVERY downstream call's input - with expensive session-bound heavy roles this
+is the dominant marginal cost; cap it via `context.maxTotalBytes`.
 
 ## Artifact store (src/store.ts)
 
-Per run: `<runsDir>/<runId>/{config.json, subcalls.jsonl, selection.json,
-gvr.json, verification.json, final-selftest.json?, final.md, run.json}`.
+Per run: `<runsDir>/<runId>/{config.json, progress.jsonl, context.json,
+subcalls.jsonl, selection.json, gvr.json, verification.json,
+final-selftest.json?, delivery.json?, final.md, handoff.md, run.json}`.
+`appendJsonl(name, value)` is the generic line-append (subcalls + progress).
 Store **creation** failure throws (an unauditable run must not start);
 **mid-run append** failures degrade to warnings (a disk hiccup must not
 destroy paid work). `run.json` is written on success, budget-exhaustion AND

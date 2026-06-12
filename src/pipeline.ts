@@ -1,15 +1,20 @@
 // Pipeline composition - the "agent team" for one task:
 //
-//   classify mode (worker)
+//   workspace context gathering (scout + orchestrator-mediated reads)
+//   -> classify mode (worker)
 //   -> [code mode: N candidates -> exec evidence -> pairwise causal selection]
 //   -> GVR loop (grade fresh-context, revise by critique), seeded with the winner
 //   -> external verification (claim atoms + holistic audit)
 //   -> assembly of the final answer from verified material
+//   -> delivery plan (task shape + apply steps) and handoff.md
 //
-// Every stage runs through the budget-guarded SubCallClient, and every artifact
-// is persisted via RunStore.
+// Every stage runs through the budget-guarded SubCallClient, every artifact is
+// persisted via RunStore, and every progress event is stage-prefixed and
+// mirrored to progress.jsonl.
 
 import { Budget, BudgetExhaustedError } from "./budget.ts";
+import { contextPackToText, gatherContext } from "./context.ts";
+import { planDelivery, renderHandoff } from "./delivery.ts";
 import { runCandidateSelfTest } from "./exec.ts";
 import { parseJsonLoose } from "./json.ts";
 import { SubCallClient } from "./llm.ts";
@@ -28,9 +33,12 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   ApodexConfig,
   ApodexResult,
+  ContextPack,
+  DeliveryPlan,
   ExecEvidence,
   GvrResult,
   ProgressFn,
+  RoleName,
   SelectionResult,
   TaskMode,
   VerificationReport,
@@ -66,8 +74,28 @@ async function classifyMode(client: SubCallClient, task: string, onProgress?: Pr
       if ((VALID_MODES as readonly string[]).includes(mode)) return mode;
     }
   }
-  onProgress?.("mode classification failed; falling back to mode=general");
+  onProgress?.("[classify] mode classification failed; falling back to mode=general");
   return "general";
+}
+
+const ROSTER_ROLES: readonly RoleName[] = ["generator", "grader", "verifier", "judge", "scout", "worker"];
+
+/**
+ * "role=provider/model" pairs for the team roster line. Resolution failures
+ * surface as "role=ERR(...)" but never fail the run from here - a broken role
+ * binding only matters (and then throws) when that role is actually called.
+ */
+async function rosterLine(resolver: RoleResolver, roles: readonly RoleName[]): Promise<string> {
+  const parts: string[] = [];
+  for (const role of roles) {
+    try {
+      const resolved = await resolver.resolve(role);
+      parts.push(`${role}=${resolved.model.provider}/${resolved.model.id}`);
+    } catch (err) {
+      parts.push(`${role}=ERR(${err instanceof Error ? err.message : String(err)})`);
+    }
+  }
+  return parts.join(" ");
 }
 
 export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
@@ -84,6 +112,13 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     (w) => warnings.push(w),
   );
 
+  // Single progress channel: every event reaches the caller AND lands in
+  // progress.jsonl, so a run's stage timeline is auditable after the fact.
+  const emitProgress: ProgressFn = (message) => {
+    store.appendJsonl("progress.jsonl", { at: new Date().toISOString(), message });
+    opts.onProgress?.(message);
+  };
+
   const budget = new Budget(opts.config.budget);
   const resolver = new RoleResolver({
     config: opts.config,
@@ -98,7 +133,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     maxRetries: opts.config.budget.subCallMaxRetries,
     onNote: (note: string) => {
       warnings.push(note);
-      opts.onProgress?.(note);
+      emitProgress(note);
     },
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
   };
@@ -111,33 +146,65 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     startedAt: new Date().toISOString(),
   });
 
+  emitProgress(`[team] ${await rosterLine(resolver, ROSTER_ROLES)}`);
+
   // Provisional mode; refined by classification inside the try so a mid-run
   // budget stop never erases an already-classified mode.
   let mode: TaskMode = opts.mode === "auto" ? "general" : opts.mode;
+  let contextPack: ContextPack | null = null;
   let selection: SelectionResult | null = null;
   let gvr: GvrResult | null = null;
   let verification: VerificationReport | null = null;
+  let deliveryPlan: DeliveryPlan | null = null;
   let finalAnswer = "";
   let budgetExhausted = false;
 
   try {
-    // --- Stage 0: mode ---
-    if (opts.mode === "auto") {
-      mode = await classifyMode(client, task, opts.onProgress);
+    // --- Stage A: workspace context (scout + orchestrator-mediated reads) ---
+    if (opts.config.context.enabled) {
+      emitProgress("[context] scouting the workspace for task-relevant files");
+      contextPack = await gatherContext({
+        client,
+        task,
+        cwd: opts.cwd,
+        config: opts.config.context,
+        onProgress: emitProgress,
+      });
+      store.writeJson("context.json", contextPack);
+      warnings.push(...contextPack.warnings);
+      emitProgress(
+        contextPack.gathered
+          ? `[context] gathered ${contextPack.files.length} file(s), ${(contextPack.totalBytes / 1024).toFixed(1)} KB in ${contextPack.rounds} scout round(s)`
+          : `[context] no files gathered: ${contextPack.skippedReason ?? "no reason recorded"}`,
+      );
+    } else {
+      emitProgress("[context] disabled by config");
     }
-    opts.onProgress?.(`mode: ${mode}`);
+    // The pack is SHARED task material: identical for generator, grader,
+    // judge, and auditors, so isolation and candidate comparability hold.
+    const materials = contextPack?.gathered ? `${task}\n\n${contextPackToText(contextPack)}` : task;
+
+    // --- Stage 0: mode ---
+    // The classifier sees the same materials as every other stage: a task
+    // like "fix the bug in src/x.ts" is only classifiable as code once the
+    // gathered file contents are visible.
+    if (opts.mode === "auto") {
+      mode = await classifyMode(client, materials, emitProgress);
+    }
+    emitProgress(`[classify] mode: ${mode}`);
 
     // --- Stage 1: candidates + causal selection (code mode with N > 1) ---
     let seedAttempt: string | undefined;
     if (mode === "code" && opts.config.candidates > 1) {
+      emitProgress(`[select] stage start: ${opts.config.candidates} parallel candidates, pairwise judging`);
       selection = await runSelection({
         client,
-        task,
+        task: materials,
         mode,
         candidates: opts.config.candidates,
         execEnabled: opts.config.exec.enabled,
         execTimeoutMs: opts.config.exec.timeoutMs,
-        ...(opts.onProgress !== undefined ? { onProgress: opts.onProgress } : {}),
+        onProgress: emitProgress,
       });
       store.writeJson("selection.json", selection);
       const winner = selection.candidates.find((c) => c.index === selection?.winnerIndex);
@@ -146,9 +213,10 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
 
     // --- Stage 2: GVR (with per-round exec probe in code mode) ---
     const execProbeEnabled = mode === "code" && opts.config.exec.enabled;
+    emitProgress(`[gvr] stage start: up to ${opts.config.rounds} rounds, early stop at ${opts.config.scoreThreshold}`);
     gvr = await runGvr({
       client,
-      task,
+      task: materials,
       mode,
       rounds: opts.config.rounds,
       scoreThreshold: opts.config.scoreThreshold,
@@ -156,7 +224,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
       ...(execProbeEnabled
         ? { execProbe: (attempt: string) => runCandidateSelfTest(attempt, opts.config.exec.timeoutMs) }
         : {}),
-      ...(opts.onProgress !== undefined ? { onProgress: opts.onProgress } : {}),
+      onProgress: emitProgress,
     });
     store.writeJson(
       "gvr.json",
@@ -190,19 +258,20 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
         }
       }
       if (!bestExecEvidence && opts.config.exec.enabled) {
-        opts.onProgress?.("running self-test of the final attempt");
+        emitProgress("[exec] running self-test of the final attempt");
         bestExecEvidence = await runCandidateSelfTest(finalAnswer, opts.config.exec.timeoutMs);
         store.writeJson("final-selftest.json", bestExecEvidence);
       }
     }
 
     // --- Stage 4: external verification ---
+    emitProgress("[verify] stage start: claim extraction, atom audits, holistic verdict");
     verification = await runVerification({
       client,
-      task,
+      task: materials,
       answer: finalAnswer,
       execEvidence: bestExecEvidence,
-      ...(opts.onProgress !== undefined ? { onProgress: opts.onProgress } : {}),
+      onProgress: emitProgress,
     });
     store.writeJson("verification.json", verification);
 
@@ -211,7 +280,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
       verification.atoms.some((a) => a.verdict === "unsupported" || a.verdict === "contradicted") ||
       (verification.holistic !== null && verification.holistic.verdict !== "approve");
     if (needsAssembly) {
-      opts.onProgress?.("assembling final answer from verified atoms");
+      emitProgress("[assemble] rebuilding the final answer from audited material");
       const issues =
         verification.holistic && verification.holistic.criticalIssues.length > 0
           ? verification.holistic.criticalIssues.map((i) => `- ${i}`).join("\n")
@@ -228,6 +297,22 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
       } else {
         warnings.push(`assembly failed (${assembled.error ?? "unknown"}); returning best GVR attempt as-is`);
       }
+    }
+
+    // --- Stage 6: delivery plan (decoration on a finished answer) ---
+    if (opts.config.delivery.planEnabled) {
+      emitProgress("[deliver] composing the delivery plan");
+      const planned = await planDelivery({ client, task, answer: finalAnswer, onProgress: emitProgress });
+      deliveryPlan = planned.plan;
+      if (planned.error !== undefined) {
+        warnings.push(`delivery planning degraded: ${planned.error}`);
+      } else if (deliveryPlan) {
+        emitProgress(
+          `[deliver] task shape: ${deliveryPlan.taskShape}; ${deliveryPlan.applySteps.length} apply step(s), ${deliveryPlan.keyPoints.length} key point(s)`,
+        );
+      }
+    } else {
+      emitProgress("[deliver] plan disabled by config");
     }
   } catch (err) {
     if (err instanceof BudgetExhaustedError) {
@@ -266,12 +351,29 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     gvr,
     selection,
     verification,
+    contextPack,
+    deliveryPlan,
     budget: budget.snapshot(),
     budgetExhausted,
     warnings,
   };
 
   store.writeText("final.md", finalAnswer);
+  if (deliveryPlan) store.writeJson("delivery.json", deliveryPlan);
+  store.writeText(
+    "handoff.md",
+    renderHandoff({
+      runId,
+      task,
+      mode,
+      bestScore: result.bestScore,
+      verification,
+      contextPack,
+      deliveryPlan,
+      budget: result.budget,
+      budgetExhausted,
+    }),
+  );
   store.writeJson("run.json", {
     status: budgetExhausted ? "budget-exhausted" : "completed",
     runId,
@@ -279,6 +381,16 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     bestScore: result.bestScore,
     earlyStopped: gvr?.earlyStopped ?? false,
     holisticVerdict: verification?.holistic?.verdict ?? null,
+    context: contextPack
+      ? {
+          gathered: contextPack.gathered,
+          files: contextPack.files.map((f) => f.path),
+          totalBytes: contextPack.totalBytes,
+          rounds: contextPack.rounds,
+          skippedReason: contextPack.skippedReason ?? null,
+        }
+      : null,
+    taskShape: deliveryPlan?.taskShape ?? null,
     budget: result.budget,
     warnings,
     finishedAt: new Date().toISOString(),

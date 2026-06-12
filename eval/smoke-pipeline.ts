@@ -44,6 +44,11 @@ async function main(): Promise<void> {
     `atoms:           ${result.verification?.atoms.map((a) => `${a.id}:${a.verdict}`).join(", ") ?? "n/a"}`,
   );
   console.log(`holistic:        ${result.verification?.holistic?.verdict ?? "n/a"}`);
+  const cp = result.contextPack;
+  console.log(
+    `context:         ${cp ? (cp.gathered ? `${cp.files.length} files, ${cp.totalBytes} bytes, ${cp.rounds} rounds` : `none (${cp.skippedReason})`) : "stage not run"}`,
+  );
+  console.log(`task shape:      ${result.deliveryPlan?.taskShape ?? "n/a (planner unavailable)"}`);
   console.log(`budget:          ${result.budget.subCalls} calls, ${result.budget.totalTokens} tokens, $${result.budget.costUsd.toFixed(4)}`);
   console.log(`wall time:       ${Math.round((Date.now() - t0) / 1000)}s`);
   console.log(`warnings:        ${result.warnings.length === 0 ? "none" : result.warnings.join(" | ")}`);

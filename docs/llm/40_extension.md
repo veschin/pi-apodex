@@ -12,16 +12,21 @@ See also: [30_subcall_infra.md](30_subcall_infra.md) · [10_scope.md](10_scope.m
 
 - **Tool `apodex`** (LLM-callable): params `task`, `mode?`
   (auto|design|code|incident|general), `rounds?` (1-10), `candidates?` (1-8).
-  Streams progress via `onUpdate` (last 8 lines); errors return
-  `isError: true` with progress-so-far. The host's abort signal IS threaded
-  (Esc cancels sub-calls).
+  The task need NOT paste workspace files - the scout stage lists and reads
+  them itself (read-only); it must still carry goal/constraints and any
+  material outside the workspace. Streams progress via `onUpdate` (last 8
+  lines); errors return `isError: true` with progress-so-far. The host's
+  abort signal IS threaded (Esc cancels sub-calls).
 - **Delivery contract (`composeDelivery`)**: the pipeline produces a verified
-  ANSWER, never workspace changes. Result = spend summary (cost, sub-calls,
-  tokens in/out, wall) + answer **inline only when <= `INLINE_ANSWER_LIMIT`
-  (1500 chars)**; longer answers are delivered as `<runDir>/final.md` path +
-  400-char preview + a NEXT STEP directive (read the file, then
-  apply/implement or present; never paste the file back). Tool details carry
-  `finalAnswerPath`.
+  ANSWER plus a delivery plan, never workspace changes itself. Result = spend
+  summary (incl. workspace-context line) + artifact refs (`final.md` AND
+  `handoff.md` paths, ALWAYS, even for inline answers) + answer **inline only
+  when <= `INLINE_ANSWER_LIMIT` (1500 chars)**, else 400-char preview + the
+  plan (key points / numbered apply steps / open items) + a **NEXT STEP
+  directive on EVERY channel**, worded by task shape: implementation ->
+  "execute the apply steps in the workspace now", analysis -> present + offer
+  follow-ups, answer -> reply concisely. Tool details carry
+  `finalAnswerPath`, `handoffPath`, `taskShape`, `contextFiles`.
 - **`/apodex <task>`**: posts a chat-visible launch echo immediately (a slash
   command consumes the input line - without the echo the run looks dead for
   minutes; real incident), mirrors progress to a widget above the editor
@@ -33,7 +38,8 @@ See also: [30_subcall_infra.md](30_subcall_infra.md) · [10_scope.md](10_scope.m
   (print mode exits without waiting for triggered turns). **Known gap: this
   path passes `signal: undefined` - a command-run pipeline is not abortable
   from the TUI** (ctx.signal is undefined outside turns; backlog).
-- **`/apodex-config`**: prints effective config + session model.
+- **`/apodex-config`**: prints effective config (incl. context/delivery
+  blocks and all six role bindings) + session model.
 
 ## Integration facts (do not re-derive; verified in NOTES.md)
 

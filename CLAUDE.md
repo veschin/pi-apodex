@@ -21,7 +21,7 @@ published at https://github.com/veschin/pi-apodex.
 - `docs/llm/10_scope.md` - what this project is NOT; read before adding any
   capability.
 - `docs/llm/20_pipeline.md` - stage invariants; read before touching
-  src/{pipeline,gvr,selector,verifier,prompts}.ts.
+  src/{pipeline,gvr,selector,verifier,prompts,context,delivery}.ts.
 - `docs/llm/30_subcall_infra.md` - sub-call/retry/budget/config/store
   contracts; read before touching src/{llm,roles,budget,config,store,exec,json}.ts.
 - `docs/llm/40_extension.md` - pi integration + packaging facts (jiti

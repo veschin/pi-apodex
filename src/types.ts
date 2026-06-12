@@ -3,7 +3,7 @@
 
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 
-export type RoleName = "generator" | "grader" | "verifier" | "worker";
+export type RoleName = "generator" | "grader" | "verifier" | "worker" | "judge" | "scout";
 
 export type TaskMode = "design" | "code" | "incident" | "general";
 
@@ -25,6 +25,27 @@ export interface BudgetConfig {
   subCallMaxRetries: number;
 }
 
+/** Delivery stage (task-shape classification + apply-steps plan). */
+export interface DeliveryConfig {
+  /** Run the delivery-planner sub-call (handoff.md is written regardless). */
+  planEnabled: boolean;
+}
+
+/** Workspace context-gathering stage (scout request-read loop). */
+export interface ContextConfig {
+  enabled: boolean;
+  /** Scout request-read rounds, 1..4. */
+  maxRounds: number;
+  /** Total files admitted into the pack, 1..40. */
+  maxFiles: number;
+  /** Per-file byte cap (head of the file beyond it), 1 KB..256 KB. */
+  maxFileBytes: number;
+  /** Whole-pack byte cap, 4 KB..1 MB. */
+  maxTotalBytes: number;
+  /** Listing entries shown to the scout, 50..5000. */
+  maxListingEntries: number;
+}
+
 export interface ApodexConfig {
   roles: Record<RoleName, RoleSpec>;
   /** K - GVR rounds (grade cycles), clamped to 1..10. */
@@ -39,6 +60,8 @@ export interface ApodexConfig {
     enabled: boolean;
     timeoutMs: number;
   };
+  context: ContextConfig;
+  delivery: DeliveryConfig;
   /** Base directory for run artifacts (absolute, or relative to cwd). */
   runsDir: string;
 }
@@ -191,6 +214,49 @@ export interface VerificationReport {
   holisticError?: string;
 }
 
+// --- Workspace context pack ---
+
+export interface ContextFileEntry {
+  /** Path relative to the workspace root (as listed). */
+  path: string;
+  /** Bytes included in the pack (after capping). */
+  bytes: number;
+  /** Actual file size on disk. */
+  totalBytes: number;
+  truncated: boolean;
+  content: string;
+}
+
+export interface ContextPack {
+  /** True when at least one file made it into the pack. */
+  gathered: boolean;
+  /** Why nothing was gathered (self-contained task, disabled, empty workspace, ...). */
+  skippedReason?: string;
+  /** Scout's orientation summary of the gathered material. */
+  map: string;
+  files: ContextFileEntry[];
+  listingCount: number;
+  listingTruncated: boolean;
+  /** Scout calls actually made. */
+  rounds: number;
+  totalBytes: number;
+  warnings: string[];
+}
+
+// --- Delivery plan ---
+
+export type TaskShape = "implementation" | "analysis" | "answer";
+
+export interface DeliveryPlan {
+  taskShape: TaskShape;
+  /** Concrete imperative steps for the calling agent (implementation tasks). */
+  applySteps: string[];
+  /** Decision-relevant points of the answer. */
+  keyPoints: string[];
+  /** Unverified / assumed / deferred items the answer names. */
+  openItems: string[];
+}
+
 // --- Pipeline ---
 
 export interface ApodexResult {
@@ -203,6 +269,8 @@ export interface ApodexResult {
   gvr: GvrResult | null;
   selection: SelectionResult | null;
   verification: VerificationReport | null;
+  contextPack: ContextPack | null;
+  deliveryPlan: DeliveryPlan | null;
   budget: BudgetSnapshot;
   budgetExhausted: boolean;
   warnings: string[];

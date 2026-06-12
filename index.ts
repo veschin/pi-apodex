@@ -17,7 +17,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { loadConfig } from "./src/config.ts";
 import { runApodex } from "./src/pipeline.ts";
 import { truncate } from "./src/llm.ts";
-import type { ApodexResult, TaskMode } from "./src/types.ts";
+import type { ApodexResult, DeliveryPlan, TaskMode } from "./src/types.ts";
 
 const MODE_VALUES = ["auto", "design", "code", "incident", "general"] as const;
 
@@ -37,6 +37,14 @@ function summaryLines(result: ApodexResult): string[] {
     `run: ${result.runId} (mode ${result.mode})`,
     `best grader score: ${result.bestScore ?? "n/a"}/100`,
   ];
+  if (result.contextPack) {
+    const cp = result.contextPack;
+    lines.push(
+      cp.gathered
+        ? `workspace context: ${cp.files.length} file(s), ${(cp.totalBytes / 1024).toFixed(1)} KB via ${cp.rounds} scout round(s)`
+        : `workspace context: none (${cp.skippedReason ?? "no reason recorded"})`,
+    );
+  }
   if (result.gvr) {
     const trajectory = result.gvr.attempts.map((a) => a.critique?.score ?? "ERR").join(" -> ");
     lines.push(
@@ -74,35 +82,61 @@ function summaryLines(result: ApodexResult): string[] {
  */
 const INLINE_ANSWER_LIMIT = 1_500;
 
+function renderPlan(plan: DeliveryPlan | null): string {
+  if (!plan) return "";
+  const sections: string[] = [];
+  if (plan.keyPoints.length > 0) {
+    sections.push(`Key points:\n${plan.keyPoints.map((p) => `- ${p}`).join("\n")}`);
+  }
+  if (plan.applySteps.length > 0) {
+    sections.push(`Apply steps:\n${plan.applySteps.map((s, i) => `${i + 1}. ${s}`).join("\n")}`);
+  }
+  if (plan.openItems.length > 0) {
+    sections.push(`Open items (unverified/deferred):\n${plan.openItems.map((p) => `- ${p}`).join("\n")}`);
+  }
+  return sections.join("\n\n");
+}
+
+function nextStepDirective(plan: DeliveryPlan | null, answerPath: string): string {
+  switch (plan?.taskShape) {
+    case "implementation":
+      return `NEXT STEP: the verified answer is final pipeline output - execute the apply steps above in the user's workspace now, verifying each step as you go (full detail: ${answerPath}), then report the outcome. Do not re-derive the solution.`;
+    case "analysis":
+      return `NEXT STEP: present the key points to the user concisely and offer the listed follow-up actions; full detail lives in ${answerPath}. Do not paste the whole file back into the chat.`;
+    case "answer":
+      return `NEXT STEP: answer the user's original request from the verified answer (full text: ${answerPath}); keep the reply short.`;
+    default:
+      return `NEXT STEP: read ${answerPath} and continue the user's original request based on it - apply/implement it in the workspace when the task asked for implementation, otherwise present its substance concisely. Do not paste the whole file back into the chat.`;
+  }
+}
+
 /**
- * channel "tool": the host model is mid-turn - a short answer needs no
- * directive (the model continues naturally). channel "chat": the message
- * itself wakes the session model (triggerTurn), so a continuation directive
- * is ALWAYS attached - finishing the user's request is the point.
+ * Delivery contract: spend summary + artifact paths (final.md / handoff.md,
+ * ALWAYS, even for inline answers) + the answer (inline <= 1500 chars, else
+ * preview) + the delivery plan + a NEXT STEP directive on every channel - the
+ * caller must act on the result, not archive it.
  */
-function composeDelivery(result: ApodexResult, channel: "tool" | "chat"): string {
+function composeDelivery(result: ApodexResult): string {
   const header = summaryLines(result).join("\n");
   const answerPath = `${result.runDir}/final.md`;
+  const handoffPath = `${result.runDir}/handoff.md`;
+  const refs = `answer: ${answerPath}\nhandoff: ${handoffPath}`;
+  const plan = renderPlan(result.deliveryPlan);
+  const directive = nextStepDirective(result.deliveryPlan, answerPath);
   const inline = result.finalAnswer.length <= INLINE_ANSWER_LIMIT;
 
   if (inline) {
-    const directive =
-      channel === "chat"
-        ? `\n\nNEXT STEP: the verified answer above is final pipeline output - continue the user's original request based on it: apply/implement it in the workspace when the task asked for implementation, otherwise summarize the substance in one short reply.`
-        : "";
-    return `${header}\n\n---\n\n${result.finalAnswer}${directive}`;
+    return [`${header}\n${refs}`, "---", result.finalAnswer, ...(plan !== "" ? [plan] : []), directive].join("\n\n");
   }
 
   const preview = result.finalAnswer.slice(0, 400).trimEnd();
   return [
-    header,
-    "",
+    `${header}\n${refs}`,
     `The verified answer is ${result.finalAnswer.length} chars - saved to: ${answerPath}`,
-    "",
     `Preview:\n${preview}...`,
-    "",
-    `NEXT STEP: read ${answerPath} and continue the user's original request based on it - apply/implement it in the workspace when the task asked for implementation, otherwise present its substance concisely. Do not paste the whole file back into the chat.`,
-  ].join("\n");
+    ...(plan !== "" ? [plan] : []),
+    directive,
+  ].join("\n\n");
 }
 
 async function execute(
@@ -135,10 +169,11 @@ export default function (pi: ExtensionAPI) {
     name: "apodex",
     label: "Apodex",
     description:
-      "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer. The pipeline produces a VERIFIED ANSWER, not workspace changes: long answers are saved to <runDir>/final.md and the result carries a spend summary plus a NEXT STEP - read the file and apply/implement it yourself when the user asked for implementation. Costs multiple model sub-calls; use for tasks where single-pass answers are unreliable, not for trivial questions.",
+      "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: a scout stage gathers read-only workspace context (file listing + targeted reads), then parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer with a delivery plan. The pipeline produces a VERIFIED ANSWER plus apply steps, not workspace changes: the answer is saved to <runDir>/final.md (plan: handoff.md) and the result carries a NEXT STEP - execute the apply steps yourself when the user asked for implementation. Costs multiple model sub-calls; use for tasks where single-pass answers are unreliable, not for trivial questions.",
     parameters: Type.Object({
       task: Type.String({
-        description: "The full task statement, self-contained: goal, constraints, inputs, logs - everything the team needs.",
+        description:
+          "The full task statement: goal, constraints, acceptance criteria, plus any materials NOT in the workspace (logs, error text, requirements). Workspace files need not be pasted - the scout stage lists and reads relevant repository files itself (read-only).",
         minLength: 1,
       }),
       mode: Type.Optional(
@@ -175,14 +210,17 @@ export default function (pi: ExtensionAPI) {
           onProgress,
         );
         return {
-          content: [{ type: "text", text: composeDelivery(result, "tool") }],
+          content: [{ type: "text", text: composeDelivery(result) }],
           details: {
             runId: result.runId,
             runDir: result.runDir,
             finalAnswerPath: `${result.runDir}/final.md`,
+            handoffPath: `${result.runDir}/handoff.md`,
             mode: result.mode,
             bestScore: result.bestScore,
             holisticVerdict: result.verification?.holistic?.verdict ?? null,
+            taskShape: result.deliveryPlan?.taskShape ?? null,
+            contextFiles: result.contextPack?.files.map((f) => f.path) ?? [],
             budget: result.budget,
             budgetExhausted: result.budgetExhausted,
             warnings: result.warnings,
@@ -240,14 +278,18 @@ export default function (pi: ExtensionAPI) {
           },
         );
         // triggerTurn: the session model wakes up on the result and finishes
-        // the job (reads final.md, applies/implements or presents) instead of
-        // the run dead-ending as a wall of text in the chat.
+        // the job (executes the apply steps / presents the key points) instead
+        // of the run dead-ending as a wall of text in the chat.
         pi.sendMessage(
           {
             customType: "apodex-result",
-            content: `apodex result (${result.runId})\n${composeDelivery(result, "chat")}`,
+            content: `apodex result (${result.runId})\n${composeDelivery(result)}`,
             display: true,
-            details: { runDir: result.runDir, finalAnswerPath: `${result.runDir}/final.md` },
+            details: {
+              runDir: result.runDir,
+              finalAnswerPath: `${result.runDir}/final.md`,
+              handoffPath: `${result.runDir}/handoff.md`,
+            },
           },
           { triggerTurn: true },
         );
@@ -282,6 +324,8 @@ export default function (pi: ExtensionAPI) {
         `rounds=${config.rounds} candidates=${config.candidates} scoreThreshold=${config.scoreThreshold}`,
         `budget: ${JSON.stringify(config.budget)}`,
         `exec: ${JSON.stringify(config.exec)}`,
+        `context: ${JSON.stringify(config.context)}`,
+        `delivery: ${JSON.stringify(config.delivery)}`,
         `runsDir: ${config.runsDir}`,
         warnings.length > 0 ? `warnings:\n${warnings.map((w) => `- ${w}`).join("\n")}` : "warnings: none",
       ].join("\n");

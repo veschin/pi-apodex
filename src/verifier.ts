@@ -167,7 +167,7 @@ export function atomsReportText(atoms: EvidenceAtom[]): string {
 }
 
 export async function runVerification(opts: VerifierOptions): Promise<VerificationReport> {
-  opts.onProgress?.("verifier: extracting claim atoms");
+  opts.onProgress?.("[verify] extracting claim atoms");
   const { atoms, error: extractError } = await extractAtoms(opts);
 
   const report: VerificationReport = { atoms, holistic: null };
@@ -175,11 +175,11 @@ export async function runVerification(opts: VerifierOptions): Promise<Verificati
     // No atoms - the holistic audit still runs on the raw answer, with the gap
     // recorded so downstream consumers know atom-level discipline is missing.
     report.holisticError = `claim extraction degraded: ${extractError}`;
-    opts.onProgress?.(`verifier: ${report.holisticError}`);
+    opts.onProgress?.(`[verify] ${report.holisticError}`);
   }
 
   if (atoms.length > 0) {
-    opts.onProgress?.(`verifier: auditing ${atoms.length} atoms`);
+    opts.onProgress?.(`[verify] auditing ${atoms.length} atoms`);
     // Parallel batches keep concurrency bounded (worker is the cheap model,
     // but each call still counts against the budget guard).
     for (let i = 0; i < atoms.length; i += AUDIT_BATCH_SIZE) {
@@ -190,14 +190,14 @@ export async function runVerification(opts: VerifierOptions): Promise<Verificati
           if (result.reason instanceof BudgetExhaustedError) throw result.reason;
           // auditAtom handles its own failures; a rejection here is unexpected.
           opts.onProgress?.(
-            `verifier: atom audit rejected unexpectedly: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
+            `[verify] atom audit rejected unexpectedly: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
           );
         }
       }
     }
   }
 
-  opts.onProgress?.("verifier: holistic audit");
+  opts.onProgress?.("[verify] holistic audit");
   const holistic = await opts.client.call({
     role: "verifier",
     label: "verify.holistic",

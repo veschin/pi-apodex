@@ -333,6 +333,87 @@ ${atomsReport}
 ${verifierIssues}`;
 }
 
+export const SCOUT_SYSTEM = `You are the context scout for an engineering task force. You see the task and a
+listing of files in the user's workspace. Decide which files (if any) the task
+force must read to answer with grounded evidence instead of guesses.
+
+Rules:
+- Request ONLY paths that appear in the listing, verbatim. Never invent paths,
+  never request directories.
+- Request the SMALLEST sufficient set, most relevant first: the files the task
+  names or implies, their direct dependencies, the project's orienting files
+  (README, manifest) only when genuinely needed.
+- A task that is fully self-contained (all inputs, code, and logs already in
+  the task text) needs NO files: decision "done" with an empty files list.
+- After file contents arrive you may request more files ("need-files") or
+  finish ("done"). When finishing AFTER gathering files, fill "map": a 3-10
+  line orientation of the gathered material (what lives where, entry points,
+  the parts that matter for this task).
+
+Return ONLY a JSON object:
+{"decision": "done" | "need-files",
+ "files": ["<path copied verbatim from the listing>", ...],
+ "map": "<orientation summary; empty string unless finishing after gathering>",
+ "reason": "<one line: why these files / why none>"}`;
+
+export function scoutUser(
+  task: string,
+  listingText: string,
+  gatheredText: string | null,
+  remainingFiles: number,
+  remainingBytes: number,
+): string {
+  return `# Task
+
+${task}
+
+# Workspace file listing (path<TAB>size in bytes)
+
+${listingText}
+
+# Already gathered
+
+${gatheredText ?? "(nothing yet)"}
+
+# Remaining budget
+
+Up to ${remainingFiles} more files, ~${Math.max(1, Math.round(remainingBytes / 1024))} KB total. Oversized files arrive truncated.`;
+}
+
+export const DELIVERY_PLANNER_SYSTEM = `You turn a finished, verified engineering answer into a delivery plan for the
+calling agent - the agent that will act on the answer inside the user's
+workspace and session.
+
+Classify task_shape:
+- "implementation" - the task asks for changes: code to write or fix, configs
+  to edit, commands to run. apply_steps MUST then be concrete imperative steps
+  the calling agent can execute directly (which files to create or modify and
+  with what, which commands to run, what to verify after each step).
+- "analysis" - diagnosis, design, or review: the user decides what happens
+  next; apply_steps lists follow-up actions only if the answer itself names them.
+- "answer" - informational; apply_steps stays empty.
+
+Also extract:
+- key_points: 3-7 decision-relevant points (conclusions, not a retelling).
+- open_items: everything the answer marks unverified, assumed, or deferred.
+Never invent steps or claims that are absent from the answer.
+
+Return ONLY a JSON object:
+{"task_shape": "implementation" | "analysis" | "answer",
+ "apply_steps": ["<imperative step>", ...],
+ "key_points": ["<point>", ...],
+ "open_items": ["<item>", ...]}`;
+
+export function deliveryPlannerUser(task: string, answer: string): string {
+  return `# Original task
+
+${task}
+
+# Verified final answer
+
+${answer}`;
+}
+
 export const MODE_CLASSIFIER_SYSTEM = `Classify an engineering task into exactly one mode:
 - "code"     - asks to write, fix, or refactor a concrete program/function/script
 - "design"   - asks to design a system, architecture, schema, or protocol

@@ -38,9 +38,13 @@ export class RunStore {
   }
 
   appendSubCall(record: SubCallRecord): void {
+    this.appendJsonl("subcalls.jsonl", record);
+  }
+
+  appendJsonl(name: string, value: unknown): void {
     this.safeWrite(() => {
-      fs.appendFileSync(path.join(this.runDir, "subcalls.jsonl"), `${JSON.stringify(record)}\n`, "utf8");
-    }, "subcalls.jsonl append");
+      fs.appendFileSync(path.join(this.runDir, name), `${JSON.stringify(value)}\n`, "utf8");
+    }, `${name} append`);
   }
 
   writeJson(name: string, value: unknown): void {

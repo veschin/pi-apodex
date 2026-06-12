@@ -134,7 +134,7 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
     for (round = 1; round <= opts.rounds; round++) {
       // 1. Produce the attempt for this round.
       if (currentAttempt === null) {
-        opts.onProgress?.(`GVR round ${round}/${opts.rounds}: generating attempt`);
+        opts.onProgress?.(`[gvr] round ${round}/${opts.rounds}: generating attempt`);
         const gen = await opts.client.call({
           role: "generator",
           label: `${opts.labelPrefix ?? "gvr"}.generate.r${round}`,
@@ -151,13 +151,13 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
       // 2. Execution probe (code mode): objective evidence about THIS attempt.
       let evidence: ExecEvidence | null = null;
       if (opts.execProbe) {
-        opts.onProgress?.(`GVR round ${round}/${opts.rounds}: running self-test probe`);
+        opts.onProgress?.(`[gvr] round ${round}/${opts.rounds}: running self-test probe`);
         evidence = await opts.execProbe(currentAttempt);
       }
       const probeFailed = evidence !== null && evidence.ran && (evidence.exitCode !== 0 || evidence.timedOut);
 
       // 3. Grade it in a fresh context (evidence attached when available).
-      opts.onProgress?.(`GVR round ${round}/${opts.rounds}: grading`);
+      opts.onProgress?.(`[gvr] round ${round}/${opts.rounds}: grading`);
       const graded = await gradeAttempt(
         opts,
         currentAttempt,
@@ -192,7 +192,7 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
           best = attempt;
         }
         opts.onProgress?.(
-          `GVR round ${round}/${opts.rounds}: score ${graded.critique.score}/100 (best ${best.critique?.score ?? "?"})`,
+          `[gvr] round ${round}/${opts.rounds}: score ${graded.critique.score}/100 (best ${best.critique?.score ?? "?"})`,
         );
         if (graded.critique.score >= opts.scoreThreshold) {
           earlyStopped = true;
@@ -205,7 +205,7 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
         // two rounds in a row without a usable grade means the grading channel
         // itself is broken - stop the loop instead of revising blind.
         if (consecutiveGradeFailures >= 2) {
-          opts.onProgress?.(`GVR: grading failed twice in a row (${graded.error ?? "?"}); stopping loop`);
+          opts.onProgress?.(`[gvr] grading failed twice in a row (${graded.error ?? "?"}); stopping loop`);
           break;
         }
       }
@@ -220,7 +220,7 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
           currentAttempt = null;
           continue;
         }
-        opts.onProgress?.(`GVR round ${round}/${opts.rounds}: revising per critique`);
+        opts.onProgress?.(`[gvr] round ${round}/${opts.rounds}: revising per critique`);
         let critiqueText = critiqueToText(lastCritique);
         if (evidence && evidence.ran) {
           critiqueText += `\n\nExecution evidence for the attempt (verbatim self-test output):\n${execEvidenceToText(evidence)}`;
@@ -233,7 +233,7 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
           temperature: 0.4,
         });
         if (!revision.ok) {
-          opts.onProgress?.(`GVR: revision failed (${revision.error ?? "?"}); keeping best so far`);
+          opts.onProgress?.(`[gvr] revision failed (${revision.error ?? "?"}); keeping best so far`);
           break;
         }
         currentAttempt = revision.text;

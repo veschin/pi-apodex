@@ -83,7 +83,7 @@ function parseVerdict(text: string): Omit<PairVerdict, "a" | "b"> | null {
 }
 
 async function generateCandidates(opts: SelectorOptions): Promise<Candidate[]> {
-  opts.onProgress?.(`selector: generating ${opts.candidates} candidates in parallel`);
+  opts.onProgress?.(`[select] generating ${opts.candidates} candidates in parallel`);
   const system = generatorSystem(opts.mode);
   const user = generatorUser(opts.task);
 
@@ -143,7 +143,7 @@ async function attachExecEvidence(opts: SelectorOptions, candidates: Candidate[]
       };
       continue;
     }
-    opts.onProgress?.(`selector: running self-test of candidate ${candidate.index}`);
+    opts.onProgress?.(`[select] running self-test of candidate ${candidate.index}`);
     candidate.execEvidence = await runCandidateSelfTest(candidate.text, opts.execTimeoutMs);
   }
 }
@@ -191,13 +191,13 @@ export async function runSelection(opts: SelectorOptions): Promise<SelectionResu
     }
   }
 
-  opts.onProgress?.(`selector: judging ${pairJobs.length} pairs on evidence axes`);
+  opts.onProgress?.(`[select] judging ${pairJobs.length} pairs on evidence axes`);
   const pairs: PairVerdict[] = [];
   // Sequential judging keeps call volume predictable under the budget guard;
   // pair count is small (N<=8 -> <=28 pairs, typical 4 -> 6 pairs).
   for (const [a, b] of pairJobs) {
     const outcome = await opts.client.call({
-      role: "worker",
+      role: "judge",
       label: `selector.judge.${a.index}v${b.index}`,
       systemPrompt: JUDGE_SYSTEM,
       userText: judgeUser(
@@ -255,6 +255,6 @@ export async function runSelection(opts: SelectorOptions): Promise<SelectionResu
 
   const winner = ranked[0];
   if (!winner) throw new SelectorError("internal: tournament produced no winner");
-  opts.onProgress?.(`selector: winner is candidate ${winner.index} (${wins[winner.index] ?? 0} wins)`);
+  opts.onProgress?.(`[select] winner is candidate ${winner.index} (${wins[winner.index] ?? 0} wins)`);
   return { winnerIndex: winner.index, candidates, pairs, wins };
 }

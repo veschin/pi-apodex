@@ -1,17 +1,24 @@
 ---
 id: pipeline
 kind: spec
-touches: src/pipeline.ts, src/gvr.ts, src/selector.ts, src/verifier.ts, src/prompts.ts
+touches: src/pipeline.ts, src/gvr.ts, src/selector.ts, src/verifier.ts, src/prompts.ts, src/context.ts, src/delivery.ts
 ---
 
 # Pipeline contracts
 
 See also: [30_subcall_infra.md](30_subcall_infra.md) · [50_eval.md](50_eval.md) · [90_lessons.md](90_lessons.md).
 
-Stage order (`src/pipeline.ts`): mode classification -> [code mode, N>1:
-candidate selection] -> GVR loop -> execution evidence for best attempt ->
-claim-level verification -> conditional assembly. Human-readable method
-description with diagram: README §3 - this spec holds the *invariants*.
+Stage order (`src/pipeline.ts`): workspace context gathering (scout) ->
+mode classification -> [code mode, N>1: candidate selection] -> GVR loop ->
+execution evidence for best attempt -> claim-level verification ->
+conditional assembly -> delivery plan + handoff.md. Human-readable method
+description with diagram: README §3 (NOTE: §3 predates the context/delivery
+stages) - this spec holds the *invariants*.
+
+Every progress event is `[stage]`-prefixed (`[team] [context] [classify]
+[select] [gvr] [exec] [verify] [assemble] [deliver]`), the run starts with a
+`[team] role=provider/model ...` roster line, and all events are mirrored to
+`progress.jsonl`.
 
 ## Numbered invariants (tests/usage rely on these)
 
@@ -59,6 +66,28 @@ description with diagram: README §3 - this spec holds the *invariants*.
 12. **Candidate generation uses `Promise.allSettled`** - a
     `BudgetExhaustedError` in one lane must stop the stage without leaving
     dangling rejections (`--unhandled-rejections=throw` safety).
+13. **The context pack is shared task material** (`src/context.ts`). Gathered
+    ONCE before classification and prepended to the task as `materials`;
+    classifier, candidates, grader, judge, auditors, and assembler all see
+    the IDENTICAL text - candidate comparability and grader isolation
+    (invariant 2) are preserved because the pack is task material, not agent
+    reasoning. Sub-calls stay tool-less: the scout returns paths as strict
+    JSON and the orchestrator performs every read.
+14. **Scout loop discipline**: at most `context.maxRounds` rounds (one scout
+    call + one bounded re-ask each); requested paths must appear verbatim in
+    the deterministic listing (git ls-files -z, fallback depth-capped walk);
+    per-file/total byte caps; credential carriers are denied at listing AND
+    read time (`DENIED_*` in src/context.ts); symlink targets are
+    realpath-checked against the workspace root. Context failures degrade to
+    warnings - the stage must never kill a run; only budget/abort propagate.
+15. **Delivery planner never blocks** (`src/delivery.ts`): runs AFTER the
+    final answer exists (worker role, one call + bounded re-ask), never
+    modifies the answer; failure -> `deliveryPlan: null` + warning, and the
+    generic NEXT STEP directive applies. `handoff.md` is rendered
+    deterministically (no LLM) on every successful exit path.
+16. **The mode classifier sees `materials`, not the bare task** - "fix the
+    bug in src/x.ts" is only classifiable as code once gathered file contents
+    are visible (critic catch, 2026-06-12).
 
 ## Rejected alternatives (and why)
 
@@ -70,6 +99,9 @@ description with diagram: README §3 - this spec holds the *invariants*.
   local scale; stage order is deterministic code instead.
 - **Single mega-prompt**: no isolation, no objective anchors; explicitly
   forbidden by the project brief.
+- **Tool-using sub-agents for workspace context**: each agent gathering its
+  own context destroys candidate comparability and makes cost unboundable;
+  rejected for the orchestrator-mediated scout request-read loop.
 
 ## Prompt conventions (`src/prompts.ts`)
 
