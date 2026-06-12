@@ -16,6 +16,8 @@ async function main(): Promise<void> {
     APODEX_GRADER: process.env.APODEX_GRADER ?? "deepseek/deepseek-v4-pro",
     APODEX_VERIFIER: process.env.APODEX_VERIFIER ?? "deepseek/deepseek-v4-pro",
     APODEX_WORKER: process.env.APODEX_WORKER ?? "deepseek/deepseek-v4-flash",
+    // Pre-brief smoke: assertions target the candidate/GVR path only.
+    APODEX_BRIEF_ENABLED: process.env.APODEX_BRIEF_ENABLED ?? "0",
   };
   const { config, warnings } = loadConfig({
     cwd: process.cwd(),

@@ -27,6 +27,11 @@ See also: [20_pipeline.md](20_pipeline.md) · [90_lessons.md](90_lessons.md).
   answer. This keeps post-2026-06-12 runs comparable with the published
   `docs/eval-results/20260611-164416`. The context/delivery stages are
   covered by `eval/smoke-context.ts` instead.
+- **Protocol pin 2 (2026-06-12, brief/judge)**: `brief.enabled=false` and
+  `APODEX_JUDGE=deepseek-v4-flash` in eval/run-eval.ts. The judge default
+  moved to session-heavy+thinking and the brief stage was added; the
+  published numbers predate both. Measuring either is a deliberate future
+  protocol change, not a default.
 
 ## Buckets and checks (eval/tasks/)
 

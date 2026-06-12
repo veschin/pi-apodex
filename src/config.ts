@@ -15,14 +15,16 @@ const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as 
 export function defaultConfig(): ApodexConfig {
   return {
     roles: {
+      analyst: { model: SESSION_MODEL, thinking: "high", temperature: 0.2, maxTokens: 8192 },
       generator: { model: SESSION_MODEL, thinking: "high", temperature: 0.7, maxTokens: 16384 },
       grader: { model: SESSION_MODEL, thinking: "high", temperature: 0, maxTokens: 8192 },
       verifier: { model: SESSION_MODEL, thinking: "high", temperature: 0.2, maxTokens: 8192 },
       worker: { model: DEFAULT_WORKER_MODEL, thinking: "off", temperature: 0, maxTokens: 8192 },
-      // judge/scout mirror the (possibly overridden) worker spec unless set
-      // explicitly via .apodex.json or APODEX_JUDGE / APODEX_SCOUT - see the
-      // mirroring step in loadConfig.
-      judge: { model: DEFAULT_WORKER_MODEL, thinking: "off", temperature: 0, maxTokens: 8192 },
+      // judge is a heavy role (2026-06-12): pairwise selection needs reasoning;
+      // flash-class judges score below random on hard pairs (survey §3.6).
+      judge: { model: SESSION_MODEL, thinking: "high", temperature: 0, maxTokens: 8192 },
+      // scout mirrors the (possibly overridden) worker spec unless set
+      // explicitly via .apodex.json or APODEX_SCOUT - see loadConfig step 3.5.
       scout: { model: DEFAULT_WORKER_MODEL, thinking: "off", temperature: 0, maxTokens: 8192 },
     },
     rounds: 4,
@@ -37,6 +39,7 @@ export function defaultConfig(): ApodexConfig {
       subCallMaxRetries: 2,
     },
     exec: { enabled: true, timeoutMs: 10_000 },
+    brief: { enabled: true },
     context: {
       enabled: true,
       maxRounds: 2,
@@ -209,7 +212,7 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
   if (fileConfig) {
     const roles = fileConfig.roles;
     if (typeof roles === "object" && roles !== null && !Array.isArray(roles)) {
-      for (const role of ["generator", "grader", "verifier", "worker", "judge", "scout"] as RoleName[]) {
+      for (const role of ["analyst", "generator", "grader", "verifier", "worker", "judge", "scout"] as RoleName[]) {
         const value = (roles as Record<string, unknown>)[role];
         if (value !== undefined && applyRoleOverride(config.roles, role, value, ".apodex.json", warnings)) {
           explicitModelRoles.add(role);
@@ -256,6 +259,11 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
       const d = delivery as Record<string, unknown>;
       if (typeof d.planEnabled === "boolean") config.delivery.planEnabled = d.planEnabled;
     }
+    const brief = fileConfig.brief;
+    if (typeof brief === "object" && brief !== null && !Array.isArray(brief)) {
+      const b = brief as Record<string, unknown>;
+      if (typeof b.enabled === "boolean") config.brief.enabled = b.enabled;
+    }
     if (typeof fileConfig.runsDir === "string" && fileConfig.runsDir.trim() !== "") {
       config.runsDir = fileConfig.runsDir;
     }
@@ -263,6 +271,7 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
 
   // 2. Environment.
   const envRole: Array<[RoleName, string]> = [
+    ["analyst", "APODEX_ANALYST"],
     ["generator", "APODEX_GENERATOR"],
     ["grader", "APODEX_GRADER"],
     ["verifier", "APODEX_VERIFIER"],
@@ -308,6 +317,9 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
   if (env.APODEX_DELIVERY_PLAN !== undefined) {
     config.delivery.planEnabled = env.APODEX_DELIVERY_PLAN !== "0" && env.APODEX_DELIVERY_PLAN !== "false";
   }
+  if (env.APODEX_BRIEF_ENABLED !== undefined) {
+    config.brief.enabled = env.APODEX_BRIEF_ENABLED !== "0" && env.APODEX_BRIEF_ENABLED !== "false";
+  }
   const envContext: Array<[keyof Omit<ApodexConfig["context"], "enabled">, string]> = [
     ["maxRounds", "APODEX_CONTEXT_MAX_ROUNDS"],
     ["maxFiles", "APODEX_CONTEXT_MAX_FILES"],
@@ -326,10 +338,10 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
   if (opts.overrides?.rounds !== undefined) config.rounds = opts.overrides.rounds;
   if (opts.overrides?.candidates !== undefined) config.candidates = opts.overrides.candidates;
 
-  // 3.5. Judge/scout without an explicit model mirror the final worker MODEL;
-  // their other fields (thinking/temperature/maxTokens) stay as defaulted or
-  // explicitly customized.
-  if (!explicitModelRoles.has("judge")) config.roles.judge.model = config.roles.worker.model;
+  // 3.5. Scout without an explicit model mirrors the final worker MODEL;
+  // its other fields (thinking/temperature/maxTokens) stay as defaulted or
+  // explicitly customized. (Judge stopped mirroring 2026-06-12: it is a
+  // heavy role now and defaults to the session model.)
   if (!explicitModelRoles.has("scout")) config.roles.scout.model = config.roles.worker.model;
 
   // 4. Clamp everything numeric.

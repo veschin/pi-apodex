@@ -13,6 +13,7 @@
 // mirrored to progress.jsonl.
 
 import { Budget, BudgetExhaustedError } from "./budget.ts";
+import { extractApprovedBrief, runBriefStage } from "./brief.ts";
 import { contextPackToText, gatherContext } from "./context.ts";
 import { planDelivery, renderHandoff } from "./delivery.ts";
 import { runCandidateSelfTest } from "./exec.ts";
@@ -33,6 +34,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   ApodexConfig,
   ApodexResult,
+  Clarification,
   ContextPack,
   DeliveryPlan,
   ExecEvidence,
@@ -53,6 +55,12 @@ export interface PipelineOptions {
   /** "auto" lets a worker call classify the task. */
   mode: TaskMode | "auto";
   cwd: string;
+  /**
+   * True when a chat-mediated user can answer analyst questions / review the
+   * draft brief (tool and /apodex paths). False (default) = assumption mode:
+   * the analyst converts unknowns into explicit assumptions and never pauses.
+   */
+  briefInteractive?: boolean;
   signal?: AbortSignal;
   onProgress?: ProgressFn;
 }
@@ -78,7 +86,7 @@ async function classifyMode(client: SubCallClient, task: string, onProgress?: Pr
   return "general";
 }
 
-const ROSTER_ROLES: readonly RoleName[] = ["generator", "grader", "verifier", "judge", "scout", "worker"];
+const ROSTER_ROLES: readonly RoleName[] = ["analyst", "generator", "grader", "verifier", "judge", "scout", "worker"];
 
 /**
  * "role=provider/model" pairs for the team roster line. Resolution failures
@@ -151,6 +159,10 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
   // Provisional mode; refined by classification inside the try so a mid-run
   // budget stop never erases an already-classified mode.
   let mode: TaskMode = opts.mode === "auto" ? "general" : opts.mode;
+  let briefText: string | null = null;
+  let briefSource: "approved" | "generated" | null = null;
+  // Task text + generated brief; reused after the try for handoff rendering.
+  let enrichedTask = task;
   let contextPack: ContextPack | null = null;
   let selection: SelectionResult | null = null;
   let gvr: GvrResult | null = null;
@@ -160,12 +172,88 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
   let budgetExhausted = false;
 
   try {
+    // --- Stage B: task brief (analyst elaboration / approved-brief detection) ---
+    if (opts.config.brief.enabled) {
+      const approved = extractApprovedBrief(task);
+      if (approved !== null) {
+        briefText = approved;
+        briefSource = "approved";
+        store.writeJson("brief.json", { kind: "approved", brief: approved, questions: [] });
+        emitProgress("[brief] approved brief found in the task; analyst skipped");
+      } else {
+        emitProgress(
+          `[brief] analyst elaborating the task (${opts.briefInteractive ? "interactive" : "assumption"} mode)`,
+        );
+        const stage = await runBriefStage({
+          client,
+          task,
+          interactive: opts.briefInteractive ?? false,
+          onProgress: emitProgress,
+        });
+        store.writeJson("brief.json", stage);
+        if (stage.kind === "questions" || stage.kind === "brief-review") {
+          const clarification: Clarification = {
+            kind: stage.kind,
+            questions: stage.questions,
+            briefDraft: stage.brief,
+          };
+          emitProgress(
+            stage.kind === "questions"
+              ? `[brief] paused: ${stage.questions.length} clarification question(s) for the user`
+              : "[brief] paused: draft brief awaits user review",
+          );
+          const snapshot = budget.snapshot();
+          store.writeJson("run.json", {
+            status: "needs-clarification",
+            runId,
+            clarification,
+            budget: snapshot,
+            warnings,
+            finishedAt: new Date().toISOString(),
+          });
+          return {
+            runId,
+            runDir: store.runDir,
+            task,
+            mode,
+            finalAnswer: "",
+            brief: null,
+            clarification,
+            bestScore: null,
+            gvr: null,
+            selection: null,
+            verification: null,
+            contextPack: null,
+            deliveryPlan: null,
+            budget: snapshot,
+            budgetExhausted: false,
+            warnings,
+          };
+        }
+        if (stage.kind === "ready" && stage.brief !== null) {
+          briefText = stage.brief;
+          briefSource = "generated";
+          emitProgress(`[brief] brief composed (${stage.brief.length} chars); joining the task materials`);
+        } else {
+          // "skipped", plus a defensive catch for ready-without-brief.
+          warnings.push(`brief stage skipped: ${stage.skippedReason ?? "no brief produced"}`);
+          emitProgress(`[brief] skipped: ${stage.skippedReason ?? "no brief produced"}`);
+        }
+      }
+    } else {
+      emitProgress("[brief] disabled by config");
+    }
+    // A generated brief is SHARED task material (same isolation rule as the
+    // context pack: every role sees the identical text). An approved brief
+    // already lives verbatim inside the task text itself.
+    enrichedTask = briefSource === "generated" ? `${task}\n\n# Task brief\n\n${briefText}` : task;
+
     // --- Stage A: workspace context (scout + orchestrator-mediated reads) ---
     if (opts.config.context.enabled) {
       emitProgress("[context] scouting the workspace for task-relevant files");
       contextPack = await gatherContext({
         client,
-        task,
+        task: enrichedTask,
         cwd: opts.cwd,
         config: opts.config.context,
         onProgress: emitProgress,
@@ -182,7 +270,9 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     }
     // The pack is SHARED task material: identical for generator, grader,
     // judge, and auditors, so isolation and candidate comparability hold.
-    const materials = contextPack?.gathered ? `${task}\n\n${contextPackToText(contextPack)}` : task;
+    const materials = contextPack?.gathered
+      ? `${enrichedTask}\n\n${contextPackToText(contextPack)}`
+      : enrichedTask;
 
     // --- Stage 0: mode ---
     // The classifier sees the same materials as every other stage: a task
@@ -289,7 +379,9 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
         role: "generator",
         label: "assemble.final",
         systemPrompt: ASSEMBLER_SYSTEM,
-        userText: assemblerUser(task, finalAnswer, atomsReportText(verification.atoms), issues),
+        // materials, not the bare task: the assembler is on the invariant-13
+        // identical-text list and must see the brief's acceptance criteria.
+        userText: assemblerUser(materials, finalAnswer, atomsReportText(verification.atoms), issues),
         temperature: 0.2,
       });
       if (assembled.ok) {
@@ -302,7 +394,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     // --- Stage 6: delivery plan (decoration on a finished answer) ---
     if (opts.config.delivery.planEnabled) {
       emitProgress("[deliver] composing the delivery plan");
-      const planned = await planDelivery({ client, task, answer: finalAnswer, onProgress: emitProgress });
+      const planned = await planDelivery({ client, task: enrichedTask, answer: finalAnswer, onProgress: emitProgress });
       deliveryPlan = planned.plan;
       if (planned.error !== undefined) {
         warnings.push(`delivery planning degraded: ${planned.error}`);
@@ -347,6 +439,8 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     task,
     mode,
     finalAnswer,
+    brief: briefText,
+    clarification: null,
     bestScore: gvr?.best.critique?.score ?? null,
     gvr,
     selection,
@@ -364,7 +458,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     "handoff.md",
     renderHandoff({
       runId,
-      task,
+      task: enrichedTask,
       mode,
       bestScore: result.bestScore,
       verification,
@@ -379,6 +473,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     runId,
     mode: result.mode,
     bestScore: result.bestScore,
+    brief: briefSource,
     earlyStopped: gvr?.earlyStopped ?? false,
     holisticVerdict: verification?.holistic?.verdict ?? null,
     context: contextPack

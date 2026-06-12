@@ -27,16 +27,19 @@ See also: [20_pipeline.md](20_pipeline.md) · [40_extension.md](40_extension.md)
 
 ## Roles (src/roles.ts)
 
-- Roles: `generator | grader | verifier | worker | judge | scout`. Spec value
-  is `"session"` or `"<provider>/<model-id>"`.
-- **judge** = the pairwise selection judge (`selector.judge.*` calls);
-  **scout** = the workspace context gatherer (`context.scout.*` calls). Both
-  are bindable via `.apodex.json` roles or `APODEX_JUDGE` / `APODEX_SCOUT`.
-- **Mirroring**: judge/scout without an explicitly set VALID model mirror the
-  FINAL worker model (after all overrides), so cheapening the worker moves
-  them too. Non-model fields (temperature/thinking/maxTokens) can be
-  customized without pinning the model (`applyRoleOverride` returns
-  model-applied, src/config.ts).
+- Roles: `analyst | generator | grader | verifier | worker | judge | scout`.
+  Spec value is `"session"` or `"<provider>/<model-id>"`.
+- **analyst** = the brief stage (`brief.analyze*` calls; session-heavy,
+  thinking high, `APODEX_ANALYST`); **judge** = the pairwise selection judge
+  (`selector.judge.*` calls); **scout** = the workspace context gatherer
+  (`context.scout.*` calls). All bindable via `.apodex.json` roles or env.
+- **Judge is a heavy role (2026-06-12)**: defaults to the session model with
+  thinking high (flash-class judges score below random on hard pairs,
+  research survey §3.6). It no longer mirrors the worker.
+- **Mirroring**: scout (only) without an explicitly set VALID model mirrors
+  the FINAL worker model (after all overrides). Non-model fields
+  (temperature/thinking/maxTokens) can be customized without pinning the
+  model (`applyRoleOverride` returns model-applied, src/config.ts).
 - Resolution order: pinned model -> registry lookup; `"session"` -> session
   model -> `DEFAULT_HEAVY_MODEL` (deepseek-v4-pro). Pinned-but-unavailable
   falls back to the session model **with a surfaced `fallbackNote`** - silent
@@ -60,10 +63,12 @@ in flight may overshoot the cap (observed 109%; predictive stop is backlog).
 ## Config (src/config.ts)
 
 Precedence: defaults ← `.apodex.json` (cwd) ← `APODEX_*` env ← inline
-overrides (tool params) ← judge/scout worker-mirroring (step 3.5). Everything
+overrides (tool params) ← scout worker-mirroring (step 3.5). Everything
 numeric is clamped (`CLAMPS` table) with warnings collected, never silently.
 K rounds 1..10, N candidates 1..8. Defaults: K=4, N=4, threshold 92, heavy
-roles = session, worker/judge/scout = deepseek-v4-flash.
+roles (analyst/generator/grader/verifier/judge) = session,
+worker/scout = deepseek-v4-flash. `brief` block: `enabled` (default true,
+env `APODEX_BRIEF_ENABLED`, file `brief.enabled`).
 
 New blocks (2026-06-12): `context` (enabled, maxRounds 1..4 = 2, maxFiles
 1..40 = 16, maxFileBytes = 16 KB, maxTotalBytes = 48 KB, maxListingEntries =

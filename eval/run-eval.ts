@@ -104,6 +104,10 @@ function engineEnv(engine: Engine): NodeJS.ProcessEnv {
     APODEX_GRADER: heavy,
     APODEX_VERIFIER: heavy,
     APODEX_WORKER: "deepseek/deepseek-v4-flash",
+    // Protocol pin (2026-06-12): the judge default moved to the session-heavy
+    // model; the published 20260611 numbers ran with judge mirroring the flash
+    // worker. Pinned to flash so post-change runs stay comparable.
+    APODEX_JUDGE: "deepseek/deepseek-v4-flash",
   };
 }
 
@@ -184,6 +188,10 @@ async function runPipelineArm(
   // reasoning loop, comparable with the published runs.
   const pinnedConfig: ApodexConfig = {
     ...config,
+    // Brief stage OFF (2026-06-12 pin): eval tasks are already fully
+    // specified; an analyst pass would add calls and mutate the materials
+    // relative to the published runs.
+    brief: { ...config.brief, enabled: false },
     context: { ...config.context, enabled: false },
     delivery: { ...config.delivery, planEnabled: false },
   };

@@ -5,112 +5,135 @@ kind: guide
 
 # Handoff
 
-State as of 2026-06-12: context + delivery stages, judge/scout roles, and
-stage transparency implemented and verified locally; NOT yet committed when
-this file was written - the session ends with the commit(s). Previous
-published state: commit `6f684ab` (main, https://github.com/veschin/pi-apodex).
+State as of 2026-06-12 (second session that day): brief stage (task analyst)
++ heavy judge implemented and verified locally; NOT committed when this file
+was written - the session ends with the commit. Previously published state:
+commit `7ca3b50` (main, https://github.com/veschin/pi-apodex).
 
 ## What exists (verified this session)
 
-- **Full pipeline**: scout context gathering -> mode classify (sees
-  materials) -> [code: N candidates -> exec -> pairwise judge] -> GVR ->
-  claim audit -> assembly -> delivery plan + handoff.md. All stage events are
-  `[stage]`-prefixed, a `[team] role=model` roster opens every run,
-  progress.jsonl persists the timeline.
-- **Workspace context stage** (`src/context.ts`): the answer to the first
-  external-user feedback ("apodex can't read the repo, no pi integration").
-  Scout requests listing paths as JSON; the orchestrator reads them
-  (containment + realpath guards, binary sniff, credential deny list,
-  16 KB/file, 48 KB/pack, <=2 rounds). Verified: `eval/smoke-context.ts` -
-  repo question -> src/json.ts gathered first, grounded answer, score
-  95-100, approve, ~$0.02.
-- **Delivery stage** (`src/delivery.ts`): task shape + apply steps / key
-  points / open items; delivery.json + deterministic handoff.md;
-  composeDelivery always shows final.md + handoff.md paths and a
-  shape-specific NEXT STEP on every channel.
-- **judge/scout roles**: `APODEX_JUDGE` / `APODEX_SCOUT` / `.apodex.json`;
-  unset models mirror the final worker model. Verified via subcalls.jsonl
-  (judge on pro while everything else flash).
-- Eval protocol pinned (context+delivery OFF in the pipeline arm,
-  eval/run-eval.ts) - published numbers `docs/eval-results/20260611-164416`
-  stay comparable. tsc clean; selfcheck passes; headless pi lists the tool.
+- **Brief stage** (`src/brief.ts`, devlog 03): an `analyst` role
+  (session-heavy, thinking high) elaborates the raw task BEFORE any solution
+  work. Interactive runs can PAUSE: clarification questions or a draft brief
+  for user review come back as `ApodexResult.clarification`; the session
+  model relays them and re-invokes with `# Clarification answers` /
+  `# Approved brief` sections in the task (stateless, chat-mediated).
+  Ready briefs join the shared materials as `# Task brief`; acceptance
+  criteria are enforced by the selftest convention and the grader.
+- **Judge is a heavy role now**: session model + thinking high by default
+  (was: mirror of the flash worker, thinking off). Scout still mirrors.
+- Full pipeline: brief -> scout context -> classify -> [code: candidates ->
+  exec -> judge] -> GVR -> claim audit -> assembly -> delivery. tsc clean,
+  selfcheck passes, live flash verification of both brief paths (pause with
+  questions; approved-brief end-to-end, $0.0074).
+- Eval protocol pin 2 (50_eval.md): brief OFF + judge pinned flash in
+  run-eval.ts - published `docs/eval-results/20260611-164416` numbers stay
+  comparable. Both smokes pin `APODEX_BRIEF_ENABLED=0`.
 
 ## What does NOT exist
 
-- No abort for `/apodex`-launched runs (signal undefined in command context);
-  Esc only works for the tool path. No double-submit debounce either.
-- No detached runs: killing pi kills in-flight runs.
-- No web-grounded verification, no sandbox, no cross-family judge panel, no
-  consistency-gated cascade (README §9 roadmap).
-- No prompt-injection defense beyond framing: a hostile workspace file
-  becomes trusted material (accepted at single-user scale; devlog 02).
-- README §3 method description predates the context/delivery stages.
+- **Validation status (user-mandated note, 2026-06-12): this session's code
+  was NOT fully validated and may contain bugs.** What ran: tsc, selfcheck,
+  ONE live flash run of the questions path and of the approved-brief path,
+  the user's live TUI run of the questions round-trip, two critic rounds.
+  What never ran: the brief-review pause live, a full clarification->answers->
+  approved-brief->final-answer cycle end-to-end, acceptance-criteria
+  enforcement quality on real tasks, any run with the new heavy-judge default
+  in the selector path. Treat src/brief.ts and the pipeline wiring as
+  lightly-tested until exercised.
+- README not updated this session: §3 method description, the roles table,
+  and config docs predate the analyst role and brief stage.
+- No in-TUI live test of the clarification round-trip (tool result ->
+  session model relays -> re-invocation) - verified only at the runApodex
+  API level; the wake-up itself is TUI behavior.
+- **No execution sandbox** (user-flagged as REQUIRED, 2026-06-12): self-tests
+  run model-authored code directly on the host as a bare node process (no
+  shell inherited, env stripped to NODE_ENV) - but the test code itself can
+  spawn arbitrary processes via child_process, write outside its tempdir, and
+  open network connections; heavy tests also compete with the host for
+  CPU/RAM. The narrow runner is behavioral discipline, not a boundary.
+- Everything from the previous handoff still open: no abort for
+  /apodex-launched runs, no detached runs, no web-grounded verification, no
+  judge panel, no consistency cascade.
+- The eval cannot measure the brief stage or the heavy judge (saturated at
+  pro, and both are pinned off for comparability); a harder benchmark is the
+  prerequisite - also for the user's "catch up to Opus" question.
+
+## Open design questions (user asked to mark these; resolve later)
+
+See 20_pipeline.md "Open questions (brief stage)": review-stop friction
+(every standard-complexity interactive run pauses), analyst runs before
+scout (no workspace context when asking), approved-brief marker can match
+inside a code fence, no cross-run question cap, complexity gate is prompt
+judgment, eval judge pin diverges from in-session defaults.
 
 ## Current problems (user-facing, live)
 
-1. The user's live pi session predates ALL of this; he must `/reload` (when
-   no runs are in flight) to get the new extension code, then run one
-   `/apodex` to interactively confirm the triggerTurn wake-up (still only
-   verified headless).
-2. Other users' sessions likewise need a fresh `pi install` /
-   `git pull` of the extension.
-3. Huge monolithic tasks still produce mediocre value per dollar -
-   task-splitting guidance lives only in the tool description.
+1. The user's live pi session needs `/reload` to get the new extension code,
+   then one real `/apodex` with a vague task to see the clarification
+   round-trip in the TUI (first live exercise of triggerTurn on
+   apodex-clarification messages).
+2. Huge monolithic tasks: the analyst now negotiates slicing in the brief,
+   but the user still slices projects manually across runs.
 
 ## Next options (user picks; not a queue)
 
-- **A. Cross-family judge panel (~0.5 d).** judge role exists; add N-vote
-  majority with per-vote artifacts (survey: PoLL panels beat a single big
-  judge at 7-8x less cost).
-- **B. Consistency-gated cascade (~0.5-1 d).** Candidate agreement as a free
-  confidence signal; highest expected value per dollar in the survey.
-- **C. Command-path abort + double-submit guard (~1 h).** AbortController in
-  the `/apodex` handler + `/apodex-stop`; ignore a second submit while one
-  is queued.
-- **D. Detached runs (~0.5 d).** Spawned-process pipeline with result
-  delivery on session return.
-- **E. README §3 refresh (~1 h).** Fold the context/delivery stages into the
-  method description + diagram.
+- **A. Live TUI round-trip test (~15 min, blocks nothing).** /reload, run
+  `/apodex хочу клон факторио в 3д`, answer the questions, approve the brief,
+  watch the full flow.
+- **B. Harder benchmark (~1 d).** Tasks where pro baseline lands 0.5-0.8;
+  unlocks measuring brief/judge/Opus-comparison. Optional third arm: Opus
+  single-pass baseline (roles are provider-agnostic).
+- **C. README refresh (~1-2 h).** §3 + roles/config tables: analyst, brief,
+  clarification contract, judge default.
+- **D. Brief-review config gate (~1 h).** `brief.review: always|never` for
+  users who want questions but not the review stop.
+- **E. Previous options remain**: judge panel, consistency cascade,
+  command-path abort, detached runs.
+- **F. Execution sandbox (~1-2 d, user-flagged REQUIRED).** Isolated runner
+  for self-tests (container or equivalent) with CPU/RAM/time caps and no
+  default network: (1) keeps heavy tests from loading the host system,
+  (2) makes running model-authored code an actual security boundary instead
+  of convention. Prerequisite for untrusted/hostile tasks; unlocks the
+  multi-language runner registry (go/python) and any relaxation of the
+  no-npm/no-network selftest convention.
 
 ## Read order
 
 1. This file.
-2. [20_pipeline.md](20_pipeline.md) - invariants 13-16 are new (context,
-   scout discipline, delivery, classifier materials).
-3. [30_subcall_infra.md](30_subcall_infra.md) - six roles + mirroring;
-   [40_extension.md](40_extension.md) - new delivery contract.
-4. [50_eval.md](50_eval.md) + [90_lessons.md](90_lessons.md) before running
-   or trusting any measurement; note the protocol pin.
+2. [20_pipeline.md](20_pipeline.md) - invariants 17-18 + open questions are
+   new (brief stage).
+3. [30_subcall_infra.md](30_subcall_infra.md) - seven roles, scout-only
+   mirroring; [40_extension.md](40_extension.md) - clarification contract.
+4. [50_eval.md](50_eval.md) - protocol pin 2 - and
+   [90_lessons.md](90_lessons.md) before trusting any measurement.
+5. [devlog/03_devlog_brief_stage.md](devlog/03_devlog_brief_stage.md) for
+   this session's reasoning.
 
 ## Smoke test (run before touching anything)
 
 ```bash
 cd ~/ai/pi-apodex && npx tsc --noEmit && npx tsx eval/selfcheck.ts
-# expected: no tsc output; selfcheck prints 6 OK lines ending with
+# expected: no tsc output; selfcheck ends with
 # "SELFCHECK PASSED: hidden tests are sound"
 
 npx tsx eval/smoke-context.ts
-# expected: "SMOKE-CONTEXT PASSED" - scout gathers src/json.ts from this
-# repo, artifacts + stage prefixes asserted (~80 s, ~$0.02, all-flash)
-
-cd /tmp && pi -p --no-session --no-skills --no-context-files \
-  --provider deepseek --model deepseek-v4-flash \
-  "Reply with only the comma-separated names of your custom tools."
-# expected: a list containing "apodex"
+# expected: "SMOKE-CONTEXT PASSED" (~80 s, ~$0.02, all-flash, brief pinned off)
 ```
 
-Optional code-path smoke (~85 s, ~$0.01): `APODEX_GENERATOR/GRADER/VERIFIER=
-...-flash npx tsx eval/smoke-pipeline.ts` - expect scout skip
-("self-contained"), early stop, task shape implementation.
+Brief-stage live check (no committed smoke yet - token-economy decision):
+re-create the two-path script from devlog 03 / this session's transcript, or
+run option A above. Path assertions: vague task + briefInteractive ->
+`clarification.kind === "questions"`; task containing `# Approved brief` ->
+no pause, `result.brief !== null`.
 
 ## Agent errors to log
 
 1. (carried over, still open) The final critic round over the publication
-   batch (README/LICENSE/packaging) was interrupted by the user on 2026-06-11
-   and never re-run; README factual claims were self-checked only.
-2. This session's critic round caught a real cross-file bug pattern twice
-   missed during implementation: a new shared input (`materials`) was wired
-   into most-but-not-all consumers (classifier missed), and a tracking flag
-   (`explicitRoles`) conflated "any field applied" with "model applied".
-   Rule reinforced: after introducing a shared value, grep EVERY call site of
-   the thing it replaces before declaring the wiring done.
+   batch (README/LICENSE/packaging) was interrupted on 2026-06-11 and never
+   re-run.
+2. The shared-value wiring lesson struck AGAIN (third time): `enrichedTask`/
+   `materials` reached most-but-not-all consumers (assembler, planner,
+   handoff renderer missed); the critic caught it, same as devlog 02. The
+   90_lessons rule ("grep every call site of the thing it replaces") was not
+   applied during implementation - it must run BEFORE handing to the critic.

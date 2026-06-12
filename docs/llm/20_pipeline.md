@@ -1,17 +1,17 @@
 ---
 id: pipeline
 kind: spec
-touches: src/pipeline.ts, src/gvr.ts, src/selector.ts, src/verifier.ts, src/prompts.ts, src/context.ts, src/delivery.ts
+touches: src/pipeline.ts, src/gvr.ts, src/selector.ts, src/verifier.ts, src/prompts.ts, src/brief.ts, src/context.ts, src/delivery.ts
 ---
 
 # Pipeline contracts
 
 See also: [30_subcall_infra.md](30_subcall_infra.md) · [50_eval.md](50_eval.md) · [90_lessons.md](90_lessons.md).
 
-Stage order (`src/pipeline.ts`): workspace context gathering (scout) ->
-mode classification -> [code mode, N>1: candidate selection] -> GVR loop ->
-execution evidence for best attempt -> claim-level verification ->
-conditional assembly -> delivery plan + handoff.md. Human-readable method
+Stage order (`src/pipeline.ts`): task brief (analyst) -> workspace context
+gathering (scout) -> mode classification -> [code mode, N>1: candidate
+selection] -> GVR loop -> execution evidence for best attempt -> claim-level
+verification -> conditional assembly -> delivery plan + handoff.md. Human-readable method
 description with diagram: README §3 (NOTE: §3 predates the context/delivery
 stages) - this spec holds the *invariants*.
 
@@ -88,6 +88,41 @@ Every progress event is `[stage]`-prefixed (`[team] [context] [classify]
 16. **The mode classifier sees `materials`, not the bare task** - "fix the
     bug in src/x.ts" is only classifiable as code once gathered file contents
     are visible (critic catch, 2026-06-12).
+17. **Brief stage (`src/brief.ts`, 2026-06-12)**: one analyst call (+ one
+    bounded re-ask) BEFORE everything else. Outcomes: `questions` /
+    `brief-review` pause the run (early return with
+    `ApodexResult.clarification`, run.json status `needs-clarification`,
+    brief.json written, NO final.md/handoff.md); `ready` joins the brief to
+    the task as `# Task brief` shared material; `skipped` degrades to a
+    warning - the stage must never kill a run. Re-invocation protocol is
+    STATELESS: a `# Clarification answers` section in the task carries the
+    user's answers; a `# Approved brief` section (regex `^# Approved brief$`,
+    first match) skips the analyst entirely. Non-interactive runs forbid
+    questions: one forced-assumptions re-ask, then degrade to no-brief.
+18. **A generated brief is shared task material** (same rule as invariant 13):
+    `enrichedTask` = task + brief feeds scout, classifier, candidates, grader,
+    judge, auditors, assembler (via `materials`), the delivery planner, and
+    handoff rendering. An approved brief already lives verbatim inside the
+    task text. Acceptance criteria in the materials are mandatory: the
+    selftest convention requires one check per criterion and the grader
+    treats an unmet criterion as a substantive violation (`prompts.ts`).
+
+## Open questions (brief stage, accepted 2026-06-12 - to revisit)
+
+- `brief-review` pauses EVERY standard-complexity interactive run; friction
+  by design (user wanted review), may deserve a config gate
+  (`brief.review: always|never`).
+- The analyst runs BEFORE the scout, so it cannot use workspace context when
+  deciding what to ask; swapping the order (or a second analyst pass) was
+  deferred for cost.
+- `# Approved brief` marker matching can fire inside a code fence in the task
+  text.
+- No cross-run cap on question rounds; the user controls runaway dialogs in
+  chat.
+- trivial/standard complexity is the analyst's prompt judgment, not a
+  deterministic gate.
+- The eval pins the judge to flash (comparability with 20260611), so the
+  "flash arm" no longer matches in-session defaults (judge=session+thinking).
 
 ## Rejected alternatives (and why)
 

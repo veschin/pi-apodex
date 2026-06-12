@@ -3,7 +3,7 @@
 
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 
-export type RoleName = "generator" | "grader" | "verifier" | "worker" | "judge" | "scout";
+export type RoleName = "analyst" | "generator" | "grader" | "verifier" | "worker" | "judge" | "scout";
 
 export type TaskMode = "design" | "code" | "incident" | "general";
 
@@ -29,6 +29,12 @@ export interface BudgetConfig {
 export interface DeliveryConfig {
   /** Run the delivery-planner sub-call (handoff.md is written regardless). */
   planEnabled: boolean;
+}
+
+/** Task-brief stage (analyst elaboration before any solution work). */
+export interface BriefConfig {
+  /** Run the analyst brief stage at the start of every run. */
+  enabled: boolean;
 }
 
 /** Workspace context-gathering stage (scout request-read loop). */
@@ -60,6 +66,7 @@ export interface ApodexConfig {
     enabled: boolean;
     timeoutMs: number;
   };
+  brief: BriefConfig;
   context: ContextConfig;
   delivery: DeliveryConfig;
   /** Base directory for run artifacts (absolute, or relative to cwd). */
@@ -257,6 +264,17 @@ export interface DeliveryPlan {
   openItems: string[];
 }
 
+// --- Brief stage ---
+
+/** Early-stop payload: the run paused for user input before any solution work. */
+export interface Clarification {
+  kind: "questions" | "brief-review";
+  /** Blocking questions (kind=questions). */
+  questions: string[];
+  /** Draft brief awaiting user approval (kind=brief-review). */
+  briefDraft: string | null;
+}
+
 // --- Pipeline ---
 
 export interface ApodexResult {
@@ -265,6 +283,10 @@ export interface ApodexResult {
   task: string;
   mode: TaskMode;
   finalAnswer: string;
+  /** Applied task brief (approved-in-task or analyst-generated), if any. */
+  brief: string | null;
+  /** Set when the run paused for clarification; finalAnswer is "" then. */
+  clarification: Clarification | null;
   bestScore: number | null;
   gvr: GvrResult | null;
   selection: SelectionResult | null;

@@ -37,6 +37,9 @@ function summaryLines(result: ApodexResult): string[] {
     `run: ${result.runId} (mode ${result.mode})`,
     `best grader score: ${result.bestScore ?? "n/a"}/100`,
   ];
+  if (result.brief !== null) {
+    lines.push(`task brief: applied (${result.brief.length} chars, see brief.json)`);
+  }
   if (result.contextPack) {
     const cp = result.contextPack;
     lines.push(
@@ -111,12 +114,37 @@ function nextStepDirective(plan: DeliveryPlan | null, answerPath: string): strin
 }
 
 /**
+ * Clarification contract: the run paused BEFORE any solution work and needs
+ * the user. The calling model must relay questions / the draft brief to the
+ * user verbatim and re-invoke apodex with the user's input appended to the
+ * ORIGINAL task under the documented section heading. State lives entirely in
+ * chat text - the paused run is closed.
+ */
+function composeClarification(result: ApodexResult): string {
+  const c = result.clarification;
+  if (!c) return "";
+  if (c.kind === "questions") {
+    return [
+      `apodex paused for clarification (run ${result.runId}) - the task analyst is blocked:`,
+      c.questions.map((q, i) => `${i + 1}. ${q}`).join("\n"),
+      `NEXT STEP: relay these questions to the user VERBATIM and wait for the answers - do not answer them yourself. Then invoke apodex again with the ORIGINAL task text plus a "# Clarification answers" section containing the numbered answers.`,
+    ].join("\n\n");
+  }
+  return [
+    `apodex composed a task brief for review (run ${result.runId}) - the pipeline is paused until the user approves it:`,
+    c.briefDraft ?? "(brief draft missing - see brief.json)",
+    `NEXT STEP: present this brief to the user for correction or approval - do not approve it yourself. Then invoke apodex again with the ORIGINAL task text plus the (possibly user-edited) brief under a "# Approved brief" heading; the pipeline will run without re-deriving it.`,
+  ].join("\n\n");
+}
+
+/**
  * Delivery contract: spend summary + artifact paths (final.md / handoff.md,
  * ALWAYS, even for inline answers) + the answer (inline <= 1500 chars, else
  * preview) + the delivery plan + a NEXT STEP directive on every channel - the
  * caller must act on the result, not archive it.
  */
 function composeDelivery(result: ApodexResult): string {
+  if (result.clarification) return composeClarification(result);
   const header = summaryLines(result).join("\n");
   const answerPath = `${result.runDir}/final.md`;
   const handoffPath = `${result.runDir}/handoff.md`;
@@ -159,6 +187,9 @@ async function execute(
     task,
     mode,
     cwd: ctx.cwd,
+    // Both extension paths are chat-mediated: the session model can relay
+    // analyst questions / the draft brief to the user and re-invoke.
+    briefInteractive: true,
     ...(signal !== undefined ? { signal } : {}),
     onProgress,
   });
@@ -169,7 +200,7 @@ export default function (pi: ExtensionAPI) {
     name: "apodex",
     label: "Apodex",
     description:
-      "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: a scout stage gathers read-only workspace context (file listing + targeted reads), then parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer with a delivery plan. The pipeline produces a VERIFIED ANSWER plus apply steps, not workspace changes: the answer is saved to <runDir>/final.md (plan: handoff.md) and the result carries a NEXT STEP - execute the apply steps yourself when the user asked for implementation. Costs multiple model sub-calls; use for tasks where single-pass answers are unreliable, not for trivial questions.",
+      "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: a task analyst elaborates the task into a brief first (it may PAUSE the run and return clarification questions or a draft brief for user review - relay them to the user verbatim and re-invoke with the answers / approved brief appended exactly as the result instructs), then a scout stage gathers read-only workspace context (file listing + targeted reads), then parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer with a delivery plan. The pipeline produces a VERIFIED ANSWER plus apply steps, not workspace changes: the answer is saved to <runDir>/final.md (plan: handoff.md) and the result carries a NEXT STEP - execute the apply steps yourself when the user asked for implementation. Costs multiple model sub-calls; use for tasks where single-pass answers are unreliable, not for trivial questions.",
     parameters: Type.Object({
       task: Type.String({
         description:
@@ -216,6 +247,7 @@ export default function (pi: ExtensionAPI) {
             runDir: result.runDir,
             finalAnswerPath: `${result.runDir}/final.md`,
             handoffPath: `${result.runDir}/handoff.md`,
+            clarification: result.clarification,
             mode: result.mode,
             bestScore: result.bestScore,
             holisticVerdict: result.verification?.holistic?.verdict ?? null,
@@ -278,12 +310,13 @@ export default function (pi: ExtensionAPI) {
           },
         );
         // triggerTurn: the session model wakes up on the result and finishes
-        // the job (executes the apply steps / presents the key points) instead
-        // of the run dead-ending as a wall of text in the chat.
+        // the job (executes the apply steps / presents the key points / relays
+        // clarification questions) instead of the run dead-ending as a wall of
+        // text in the chat.
         pi.sendMessage(
           {
-            customType: "apodex-result",
-            content: `apodex result (${result.runId})\n${composeDelivery(result)}`,
+            customType: result.clarification ? "apodex-clarification" : "apodex-result",
+            content: `apodex ${result.clarification ? "clarification needed" : "result"} (${result.runId})\n${composeDelivery(result)}`,
             display: true,
             details: {
               runDir: result.runDir,
@@ -324,6 +357,7 @@ export default function (pi: ExtensionAPI) {
         `rounds=${config.rounds} candidates=${config.candidates} scoreThreshold=${config.scoreThreshold}`,
         `budget: ${JSON.stringify(config.budget)}`,
         `exec: ${JSON.stringify(config.exec)}`,
+        `brief: ${JSON.stringify(config.brief)}`,
         `context: ${JSON.stringify(config.context)}`,
         `delivery: ${JSON.stringify(config.delivery)}`,
         `runsDir: ${config.runsDir}`,

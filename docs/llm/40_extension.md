@@ -12,6 +12,15 @@ See also: [30_subcall_infra.md](30_subcall_infra.md) · [10_scope.md](10_scope.m
 
 - **Tool `apodex`** (LLM-callable): params `task`, `mode?`
   (auto|design|code|incident|general), `rounds?` (1-10), `candidates?` (1-8).
+  Both extension paths run with `briefInteractive: true`.
+- **Clarification contract (2026-06-12)**: when `result.clarification` is set
+  the run PAUSED in the brief stage. `composeClarification` returns the
+  questions (or the draft brief) plus a NEXT STEP telling the calling model to
+  relay them to the user VERBATIM (never answer/approve itself) and re-invoke
+  apodex with the ORIGINAL task plus a `# Clarification answers` /
+  `# Approved brief` section. Command path sends it as customType
+  `apodex-clarification` with `triggerTurn: true`. The paused run is closed;
+  all dialog state lives in chat text.
   The task need NOT paste workspace files - the scout stage lists and reads
   them itself (read-only); it must still carry goal/constraints and any
   material outside the workspace. Streams progress via `onUpdate` (last 8

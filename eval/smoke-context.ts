@@ -29,6 +29,9 @@ async function main(): Promise<void> {
     APODEX_GRADER: process.env.APODEX_GRADER ?? "deepseek/deepseek-v4-flash",
     APODEX_VERIFIER: process.env.APODEX_VERIFIER ?? "deepseek/deepseek-v4-flash",
     APODEX_WORKER: process.env.APODEX_WORKER ?? "deepseek/deepseek-v4-flash",
+    // This smoke asserts the context stage in isolation; the brief stage has
+    // its own verification path and would prepend an analyst call here.
+    APODEX_BRIEF_ENABLED: process.env.APODEX_BRIEF_ENABLED ?? "0",
   };
   const { config, warnings } = loadConfig({ cwd: process.cwd(), env, overrides: { rounds: 1, candidates: 1 } });
 

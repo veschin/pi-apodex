@@ -35,6 +35,10 @@ const CODE_OUTPUT_CONVENTION = `Output convention for code answers (MANDATORY):
 - Print what each check covers; process.exit(1) on any failure, clean exit on
   success. Runnable with plain "node selftest.mjs" - no npm installs, no
   network, no external files.
+- When the task materials contain an "Acceptance criteria" section, the
+  selftest must additionally include at least one check per criterion, in the
+  criteria's order, printing the criterion number it covers; an uncovered
+  criterion counts as unverified.
 - After the blocks, explain the approach, edge cases covered, and limitations.`;
 
 export function generatorSystem(mode: TaskMode): string {
@@ -102,6 +106,11 @@ Scoring bands (0-100, integer):
   missing validation, asserted-but-unverified correctness).
 - 25-49: multiple substantive violations or a likely-wrong core approach.
 - 0-24: pseudo-answer: pattern-matched, placeholder-ridden, or fundamentally wrong.
+
+When the task materials contain an "Acceptance criteria" section, every
+criterion is a mandatory requirement: a criterion that is not demonstrably met
+(or honestly flagged as unmet/unverifiable) is a substantive violation
+(50-74 band at most), and your revision directives must name it.
 
 When an "Execution evidence" section is present, it is ground truth about
 observed behavior and outweighs any prose claim in the candidate:
@@ -412,6 +421,81 @@ ${task}
 # Verified final answer
 
 ${answer}`;
+}
+
+export const ANALYST_SYSTEM = `You are the task analyst opening an engineering task-force run. You turn a raw
+user task into a reviewed brief BEFORE any solution work starts: understand the
+real use case, surface what is unclear, pin down what "done" means. You never
+solve the task yourself.
+
+What the pipeline behind you can deliver - negotiate scope ONLY within this:
+- One verified ANSWER per run: a design, a diagnosis, an explanation, or code.
+- Code answers are ONE self-contained JavaScript solution plus a self-test
+  runnable with plain "node selftest.mjs" - no npm installs, no network, no
+  external files, no GUI/browser/game-engine runtime. Code that cannot be
+  exercised that way loses execution verification (the pipeline's strongest
+  signal) - steer scope toward node-verifiable slices.
+- The pipeline never edits the user's workspace; it returns the answer plus
+  apply steps for the calling agent.
+- One run = one module-sized deliverable. A project-sized request must be
+  sliced: propose the first slice and name what is deferred.
+
+Decision rules:
+1. status "questions" - the task has a hole no safe assumption can bridge:
+   contradictory requirements, an undefined deliverable, unknown constraints
+   that change the design, or scope far beyond one run. Ask 1-5 questions,
+   each one sentence, each naming WHY it blocks (quote the task phrase).
+   Never ask about what you can safely assume; never re-ask anything already
+   answered in the task text.
+2. status "ready" - you can state the task precisely. Produce the brief and
+   classify complexity:
+   - "trivial": one obvious deliverable, no real design choices, nothing worth
+     user review. The run continues immediately.
+   - "standard": everything else - the brief goes to the user for review.
+
+The user message names the mode. In NON-INTERACTIVE mode status "questions" is
+FORBIDDEN: convert every unknown into an explicit assumption in the brief.
+
+Brief format - markdown with EXACTLY these section headings:
+# Brief
+## Understanding - 2-5 sentences: the task in your own words, the use case, who
+or what consumes the result.
+## Scope: in - bullets: what this run delivers.
+## Scope: out - bullets: what is explicitly deferred ("(nothing)" if empty).
+## Functional requirements - numbered; behavior the deliverable must have.
+## Non-functional requirements - numbered; the quality bar for THIS task:
+error paths, edge cases (empty/null/boundary/concurrency where relevant),
+validation at trust boundaries, honest verification. Concrete, not generic
+("rejects negative grid coordinates", not "good error handling").
+## Acceptance criteria - numbered, checkable statements; each verifiable by a
+test or by direct inspection of the answer. These become mandatory checks
+downstream.
+## Assumptions - numbered; every choice made for the user, worded so a wrong
+assumption is easy to spot and correct ("(none)" if empty).
+## Suggestions: in scope - 0-4 improvements proposed for THIS run.
+## Suggestions: later - 0-3 improvements explicitly deferred.
+
+Suggestion discipline (both lists): one line each, in the form
+"<what> - <why, anchored to a quoted task phrase or a concrete failure
+scenario> - <cost: cheap|moderate|expensive> [functional|hifi]". Propose only
+what serves the stated use case: no architecture for hypothetical future
+needs, no scaling/config/abstraction layers the task does not require. The
+simplest thing that works well wins.
+
+Return ONLY a JSON object, no markdown fences:
+{"status": "questions" | "ready",
+ "questions": ["<question - why it blocks>", ...],
+ "complexity": "trivial" | "standard",
+ "brief": "<the full markdown brief, or empty string when status=questions>"}`;
+
+export function analystUser(task: string, interactive: boolean, answersPresent: boolean): string {
+  const mode = interactive
+    ? `INTERACTIVE: you may return status "questions" when genuinely blocked.`
+    : `NON-INTERACTIVE: status "questions" is forbidden - convert unknowns into explicit assumptions.`;
+  const answersNote = answersPresent
+    ? `\n\nThe task already contains a "# Clarification answers" section. Do not re-ask anything answered there; ask again ONLY if a hard contradiction remains, otherwise produce the brief.`
+    : "";
+  return `# Task (raw, from the user)\n\n${task}\n\n# Mode\n\n${mode}${answersNote}`;
 }
 
 export const MODE_CLASSIFIER_SYSTEM = `Classify an engineering task into exactly one mode:
